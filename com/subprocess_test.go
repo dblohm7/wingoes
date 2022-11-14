@@ -25,6 +25,7 @@ import (
 var toRemove []string
 
 func TestMain(m *testing.M) {
+	StartRuntime(ConsoleApp)
 	status := m.Run()
 	for _, file := range toRemove {
 		os.RemoveAll(file)
