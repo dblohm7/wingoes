@@ -21,3 +21,35 @@ type Object interface {
 	// of its return value must always match the type of the method's receiver.
 	Make(r ABIReceiver) any
 }
+
+type EmbedsGenericObject[A ABI] interface {
+	~struct{ GenericObject[A] }
+}
+
+// As casts obj to an object of type O, or panics if obj cannot be converted to O.
+func As[O Object, A ABI, PU PUnknown[A], E EmbedsGenericObject[A]](obj E) O {
+	o, err := TryAs[O, A, PU](obj)
+	if err != nil {
+		panic(fmt.Sprintf("wingoes.com.As error: %v", err))
+	}
+	return o
+}
+
+// TryAs casts obj to an object of type O, or returns an error if obj cannot be
+// converted to O.
+func TryAs[O Object, A ABI, PU PUnknown[A], E EmbedsGenericObject[A]](obj E) (O, error) {
+	var o O
+
+	iid := o.GetIID()
+	p := (PU)(unsafe.Pointer(*(obj.Pp)))
+
+	i, err := p.QueryInterface(iid)
+	if err != nil {
+		return o, err
+	}
+
+	r := NewABIReceiver()
+	*r = i.(*IUnknownABI)
+
+	return o.Make(r).(O), nil
+}
