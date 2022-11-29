@@ -22,13 +22,13 @@ type Error HRESULT
 
 const (
 	hrS_OK                 = HRESULT(0)
-	hrE_ABORT              = HRESULT(-((0x80004004 ^ 0xFFFFFFFF)+1))
-	hrE_FAIL               = HRESULT(-((0x80004005 ^ 0xFFFFFFFF)+1))
-	hrE_NOINTERFACE        = HRESULT(-((0x80004002 ^ 0xFFFFFFFF)+1))
-	hrE_NOTIMPL            = HRESULT(-((0x80004001 ^ 0xFFFFFFFF)+1))
-	hrE_POINTER            = HRESULT(-((0x80004003 ^ 0xFFFFFFFF)+1))
-	hrE_UNEXPECTED         = HRESULT(-((0x8000FFFF ^ 0xFFFFFFFF)+1))
-	hrTYPE_E_WRONGTYPEKIND = HRESULT(-((0x8002802A ^ 0xFFFFFFFF)+1))
+	hrE_ABORT              = HRESULT(-((0x80004004 ^ 0xFFFFFFFF) + 1))
+	hrE_FAIL               = HRESULT(-((0x80004005 ^ 0xFFFFFFFF) + 1))
+	hrE_NOINTERFACE        = HRESULT(-((0x80004002 ^ 0xFFFFFFFF) + 1))
+	hrE_NOTIMPL            = HRESULT(-((0x80004001 ^ 0xFFFFFFFF) + 1))
+	hrE_POINTER            = HRESULT(-((0x80004003 ^ 0xFFFFFFFF) + 1))
+	hrE_UNEXPECTED         = HRESULT(-((0x8000FFFF ^ 0xFFFFFFFF) + 1))
+	hrTYPE_E_WRONGTYPEKIND = HRESULT(-((0x8002802A ^ 0xFFFFFFFF) + 1))
 )
 
 var (
@@ -62,7 +62,7 @@ const (
 )
 
 const (
-	facilityWin32 hrFacility = 7
+	facilityWin32 = hrFacility(7)
 )
 
 // Succeeded returns true when hr is successful, but its actual error code
@@ -101,8 +101,8 @@ func (hr HRESULT) code() hrCode {
 }
 
 const (
-	hrFail    failBit = true
-	hrSuccess failBit = false
+	hrFail    = failBit(true)
+	hrSuccess = failBit(false)
 )
 
 func hresultFromFacilityAndCode(isFail failBit, f hrFacility, c hrCode) HRESULT {
