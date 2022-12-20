@@ -10,15 +10,15 @@ import (
 	"golang.org/x/sys/windows"
 )
 
-// UserSids contains pointers to the SIDs for a user and their primary group.
-type UserSids struct {
+// UserSIDs contains pointers to the SIDs for a user and their primary group.
+type UserSIDs struct {
 	User         *windows.SID
 	PrimaryGroup *windows.SID
 }
 
-// CurrentProcessUserSids returns a UserSids containing the SIDs of the user
+// CurrentProcessUserSIDs returns a UserSIDs containing the SIDs of the user
 // and primary group who own the current process.
-func CurrentProcessUserSids() (*UserSids, error) {
+func CurrentProcessUserSIDs() (*UserSIDs, error) {
 	token, err := windows.OpenCurrentProcessToken()
 	if err != nil {
 		return nil, err
@@ -46,7 +46,7 @@ func CurrentProcessUserSids() (*UserSids, error) {
 		return nil, err
 	}
 
-	return &UserSids{User: userSid, PrimaryGroup: primaryGroupSid}, nil
+	return &UserSIDs{User: userSid, PrimaryGroup: primaryGroupSid}, nil
 }
 
 func getTokenInfo[T any](token windows.Token, infoClass uint32) (*T, error) {

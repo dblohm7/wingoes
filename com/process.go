@@ -249,16 +249,16 @@ func buildSecurityDescriptor(dacl *windows.ACL) (*windows.SECURITY_DESCRIPTOR, e
 	}
 
 	// CoInitializeSecurity will fail unless the SD's owner and group are both set.
-	userSids, err := wingoes.CurrentProcessUserSids()
+	userSIDs, err := wingoes.CurrentProcessUserSIDs()
 	if err != nil {
 		return nil, err
 	}
 
-	if err := sd.SetOwner(userSids.User, false); err != nil {
+	if err := sd.SetOwner(userSIDs.User, false); err != nil {
 		return nil, err
 	}
 
-	if err := sd.SetGroup(userSids.PrimaryGroup, false); err != nil {
+	if err := sd.SetGroup(userSIDs.PrimaryGroup, false); err != nil {
 		return nil, err
 	}
 
