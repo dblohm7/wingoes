@@ -4,9 +4,18 @@
 
 package com
 
+import (
+	"fmt"
+	"unsafe"
+)
+
 // GenericObject is a struct that wraps any interface that implements the COM ABI.
 type GenericObject[A ABI] struct {
 	Pp **A
+}
+
+func (o GenericObject[A]) pp() **A {
+	return o.Pp
 }
 
 // Object is the interface that all garbage-collected instances of COM interfaces
@@ -22,8 +31,11 @@ type Object interface {
 	Make(r ABIReceiver) any
 }
 
+// EmbedsGenericObject is a type constraint matching any struct that embeds
+// a GenericObject[A].
 type EmbedsGenericObject[A ABI] interface {
 	~struct{ GenericObject[A] }
+	pp() **A
 }
 
 // As casts obj to an object of type O, or panics if obj cannot be converted to O.
@@ -41,7 +53,7 @@ func TryAs[O Object, A ABI, PU PUnknown[A], E EmbedsGenericObject[A]](obj E) (O,
 	var o O
 
 	iid := o.GetIID()
-	p := (PU)(unsafe.Pointer(*(obj.Pp)))
+	p := (PU)(unsafe.Pointer(*(obj.pp())))
 
 	i, err := p.QueryInterface(iid)
 	if err != nil {

@@ -43,7 +43,7 @@ func makeDACL() (*windows.ACL, error) {
 		return nil, err
 	}
 
-	userSids, err := wingoes.CurrentProcessUserSids()
+	userSIDs, err := wingoes.CurrentProcessUserSIDs()
 	if err != nil {
 		return nil, err
 	}
@@ -66,7 +66,7 @@ func makeDACL() (*windows.ACL, error) {
 
 	userTrustee := windows.TRUSTEE{nil, windows.NO_MULTIPLE_TRUSTEE,
 		windows.TRUSTEE_IS_SID, windows.TRUSTEE_IS_USER,
-		windows.TrusteeValueFromSID(userSids.User)}
+		windows.TrusteeValueFromSID(userSIDs.User)}
 
 	ea := []windows.EXPLICIT_ACCESS{
 		{
