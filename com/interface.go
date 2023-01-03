@@ -18,14 +18,24 @@ type IUnknown interface {
 	Release() int32
 }
 
+// This is a sentinel that indicates that a struct implements the COM ABI.
+// Only IUnknownABI should implement this.
+type hasVTable interface {
+	vtable() *uintptr
+}
+
 // IUnknownABI describes the ABI of the IUnknown interface (ie, a vtable).
 type IUnknownABI struct {
 	Vtbl *uintptr
 }
 
+func (abi IUnknownABI) vtable() *uintptr {
+	return abi.Vtbl
+}
+
 // ABI is a type constraint allowing the COM ABI, or any struct that embeds it.
 type ABI interface {
-	IUnknownABI | ~struct{ IUnknownABI }
+	hasVTable
 }
 
 // PUnknown is a type constraint for types that both implement IUnknown and
