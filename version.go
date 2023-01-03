@@ -20,12 +20,13 @@ var (
 // osVersionInfo is more compact than windows.OsVersionInfoEx, which contains
 // extraneous information.
 type osVersionInfo struct {
-	major    uint32
-	minor    uint32
-	build    uint32
-	str      string
-	isDC     bool
-	isServer bool
+	major       uint32
+	minor       uint32
+	build       uint32
+	servicePack uint16
+	str         string
+	isDC        bool
+	isServer    bool
 }
 
 const (
@@ -38,11 +39,12 @@ func getVersionInfo() *osVersionInfo {
 	verOnce.Do(func() {
 		osv := windows.RtlGetVersion()
 		verInfo = osVersionInfo{
-			major: osv.MajorVersion,
-			minor: osv.MinorVersion,
-			build: osv.BuildNumber,
-			str:   fmt.Sprintf("%d.%d.%d", osv.MajorVersion, osv.MinorVersion, osv.BuildNumber),
-			isDC:  osv.ProductType == _VER_NT_DOMAIN_CONTROLLER,
+			major:       osv.MajorVersion,
+			minor:       osv.MinorVersion,
+			build:       osv.BuildNumber,
+			servicePack: osv.ServicePackMajor,
+			str:         fmt.Sprintf("%d.%d.%d", osv.MajorVersion, osv.MinorVersion, osv.BuildNumber),
+			isDC:        osv.ProductType == _VER_NT_DOMAIN_CONTROLLER,
 			// Domain Controllers are also implicitly servers.
 			isServer: osv.ProductType == _VER_NT_DOMAIN_CONTROLLER || osv.ProductType == _VER_NT_SERVER,
 		}
@@ -94,6 +96,16 @@ func IsWinServer() bool {
 // configured to act as a domain controller.
 func IsWinDomainController() bool {
 	return getVersionInfo().isDC
+}
+
+// IsWin7SP1OrGreater returns true when running on Windows 7 SP1 or newer.
+func IsWin7SP1OrGreater() bool {
+	if IsWin8OrGreater() {
+		return true
+	}
+
+	vi := getVersionInfo()
+	return vi.major == 6 && vi.minor == 1 && vi.servicePack > 0
 }
 
 // IsWin8OrGreater returns true when running on Windows 8.0 or newer.
