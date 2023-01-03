@@ -5,6 +5,8 @@
 package com
 
 import (
+	"unsafe"
+
 	"github.com/dblohm7/wingoes"
 	"golang.org/x/sys/windows"
 )
@@ -119,3 +121,15 @@ const (
 	rpcImpLevelImpersonate = rpcImpersonationLevel(3)
 	rpcImpLevelDelegate    = rpcImpersonationLevel(4)
 )
+
+type COMAllocatedString uintptr
+
+func (s *COMAllocatedString) String() string {
+	return windows.UTF16PtrToString((*uint16)(unsafe.Pointer(*s)))
+}
+
+func (s *COMAllocatedString) Close() error {
+	CoTaskMemFree(unsafe.Pointer(*s))
+	*s = 0
+	return nil
+}

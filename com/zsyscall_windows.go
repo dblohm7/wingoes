@@ -7,6 +7,7 @@ import (
 	"unsafe"
 
 	"github.com/dblohm7/wingoes"
+	"github.com/dblohm7/wingoes/internal"
 	"golang.org/x/sys/windows"
 )
 
@@ -41,13 +42,17 @@ func errnoErr(e syscall.Errno) error {
 var (
 	modole32    = windows.NewLazySystemDLL("ole32.dll")
 	modoleaut32 = windows.NewLazySystemDLL("oleaut32.dll")
+	modshlwapi  = windows.NewLazySystemDLL("shlwapi.dll")
 
-	procCoCreateInstance     = modole32.NewProc("CoCreateInstance")
-	procCoGetApartmentType   = modole32.NewProc("CoGetApartmentType")
-	procCoIncrementMTAUsage  = modole32.NewProc("CoIncrementMTAUsage")
-	procCoInitializeEx       = modole32.NewProc("CoInitializeEx")
-	procCoInitializeSecurity = modole32.NewProc("CoInitializeSecurity")
-	procSetOaNoCache         = modoleaut32.NewProc("SetOaNoCache")
+	procCoCreateInstance      = modole32.NewProc("CoCreateInstance")
+	procCoGetApartmentType    = modole32.NewProc("CoGetApartmentType")
+	procCoIncrementMTAUsage   = modole32.NewProc("CoIncrementMTAUsage")
+	procCoInitializeEx        = modole32.NewProc("CoInitializeEx")
+	procCoInitializeSecurity  = modole32.NewProc("CoInitializeSecurity")
+	procCoTaskMemFree         = modole32.NewProc("CoTaskMemFree")
+	procCreateStreamOnHGlobal = modole32.NewProc("CreateStreamOnHGlobal")
+	procSetOaNoCache          = modoleaut32.NewProc("SetOaNoCache")
+	procSHCreateMemStream     = modshlwapi.NewProc("SHCreateMemStream")
 )
 
 func coCreateInstance(clsid *CLSID, unkOuter *IUnknownABI, clsctx coCLSCTX, iid *IID, ppv **IUnknownABI) (hr wingoes.HRESULT) {
@@ -80,7 +85,28 @@ func coInitializeSecurity(sd *windows.SECURITY_DESCRIPTOR, authSvcLen int32, aut
 	return
 }
 
+func CoTaskMemFree(pv unsafe.Pointer) {
+	syscall.Syscall(procCoTaskMemFree.Addr(), 1, uintptr(pv), 0, 0)
+	return
+}
+
+func createStreamOnHGlobal(hglobal internal.HGLOBAL, deleteOnRelease bool, stream **IUnknownABI) (hr wingoes.HRESULT) {
+	var _p0 uint32
+	if deleteOnRelease {
+		_p0 = 1
+	}
+	r0, _, _ := syscall.Syscall(procCreateStreamOnHGlobal.Addr(), 3, uintptr(hglobal), uintptr(_p0), uintptr(unsafe.Pointer(stream)))
+	hr = wingoes.HRESULT(r0)
+	return
+}
+
 func setOaNoCache() {
 	syscall.Syscall(procSetOaNoCache.Addr(), 0, 0, 0, 0)
+	return
+}
+
+func shCreateMemStream(pInit *byte, cbInit uint32) (stream *IUnknownABI) {
+	r0, _, _ := syscall.Syscall(procSHCreateMemStream.Addr(), 2, uintptr(unsafe.Pointer(pInit)), uintptr(cbInit), 0)
+	stream = (*IUnknownABI)(unsafe.Pointer(r0))
 	return
 }
