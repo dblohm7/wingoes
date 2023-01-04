@@ -446,7 +446,7 @@ const hrE_OUTOFMEMORY = wingoes.HRESULT(-((0x8007000E ^ 0xFFFFFFFF) + 1))
 // NewMemoryStream creates a new in-memory Stream object initially containing
 // initialBytes. Its seek pointer is guaranteed to be the start of the stream.
 func NewMemoryStream(initialBytes []byte) (result Stream, _ error) {
-	if len(initialBytes) > math.MaxUint32 {
+	if len(initialBytes) > math.MaxInt32 {
 		return result, wingoes.ErrorFromHRESULT(hrE_OUTOFMEMORY)
 	}
 
