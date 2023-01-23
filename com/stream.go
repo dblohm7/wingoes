@@ -70,6 +70,10 @@ type STATSTG struct {
 	_              uint32 // reserved
 }
 
+func (st *STATSTG) Close() error {
+	return st.Name.Close()
+}
+
 type ISequentialStreamABI struct {
 	IUnknownABI
 }
@@ -78,13 +82,26 @@ type IStreamABI struct {
 	ISequentialStreamABI
 }
 
+type SequentialStream struct {
+	GenericObject[ISequentialStreamABI]
+}
+
 type Stream struct {
 	GenericObject[IStreamABI]
 }
 
-const hrS_FALSE = wingoes.HRESULT(1)
+func (abi *ISequentialStreamABI) Read(p []byte) (int, error) {
+	// Because the syscall uses 32-bit values for length.
+	maxLen := math.MaxUint32
+	if runtime.GOARCH == "386" {
+		// Otherwise we cannot fit cbRead into the int return value.
+		maxLen = math.MaxInt32
+	}
 
-func (abi *ISequentialStreamABI) Read(p []byte) (n int, err error) {
+	if len(p) > maxLen {
+		p = p[:maxLen]
+	}
+
 	var cbRead uint32
 	method := unsafe.Slice(abi.Vtbl, 5)[3]
 
@@ -97,12 +114,12 @@ func (abi *ISequentialStreamABI) Read(p []byte) (n int, err error) {
 	)
 	e := wingoes.ErrorFromHRESULT(wingoes.HRESULT(rc))
 	if e.Failed() {
-		return n, e
+		return 0, e
 	}
 
 	// Various implementations of IStream handle EOF differently. We need to
 	// deal with both.
-	if e.AsHRESULT() == hrS_FALSE || (len(p) > 0 && cbRead == 0) {
+	if e.AsHRESULT() == wingoes.S_FALSE || (cbRead == 0 && len(p) > 0) {
 		return int(cbRead), io.EOF
 	}
 
@@ -110,6 +127,17 @@ func (abi *ISequentialStreamABI) Read(p []byte) (n int, err error) {
 }
 
 func (abi *ISequentialStreamABI) Write(p []byte) (int, error) {
+	// Because the syscall uses 32-bit values for length.
+	maxLen := math.MaxUint32
+	if runtime.GOARCH == "386" {
+		// Otherwise we cannot fit cbRead into the int return value.
+		maxLen = math.MaxInt32
+	}
+
+	if len(p) > maxLen {
+		p = p[:maxLen]
+	}
+
 	var cbWritten uint32
 	method := unsafe.Slice(abi.Vtbl, 5)[4]
 
@@ -125,6 +153,35 @@ func (abi *ISequentialStreamABI) Write(p []byte) (int, error) {
 	}
 
 	return int(cbWritten), nil
+}
+
+func (o SequentialStream) GetIID() *IID {
+	return IID_ISequentialStream
+}
+
+func (o SequentialStream) Make(r ABIReceiver) any {
+	if r == nil {
+		return SequentialStream{}
+	}
+
+	runtime.SetFinalizer(r, ReleaseABI)
+
+	pp := (**ISequentialStreamABI)(unsafe.Pointer(r))
+	return SequentialStream{GenericObject[ISequentialStreamABI]{Pp: pp}}
+}
+
+func (o SequentialStream) UnsafeUnwrap() *ISequentialStreamABI {
+	return *(o.Pp)
+}
+
+func (o SequentialStream) Read(b []byte) (n int, err error) {
+	p := *(o.Pp)
+	return p.Read(b)
+}
+
+func (o SequentialStream) Write(b []byte) (int, error) {
+	p := *(o.Pp)
+	return p.Write(b)
 }
 
 func (abi *IStreamABI) Seek(offset int64, whence int) (n int64, _ error) {
@@ -232,7 +289,6 @@ func (abi *IStreamABI) Commit(flags STGC) error {
 		uintptr(unsafe.Pointer(abi)),
 		uintptr(flags),
 	)
-
 	if e := wingoes.ErrorFromHRESULT(wingoes.HRESULT(rc)); e.Failed() {
 		return e
 	}
@@ -325,10 +381,6 @@ func (abi *IStreamABI) UnlockRegion(offset, numBytes uint64, lockType LOCKTYPE) 
 	return nil
 }
 
-func (st *STATSTG) Close() error {
-	return st.Name.Close()
-}
-
 func (abi *IStreamABI) Stat(flags STATFLAG) (result STATSTG, _ error) {
 	method := unsafe.Slice(abi.Vtbl, 14)[12]
 
@@ -338,7 +390,6 @@ func (abi *IStreamABI) Stat(flags STATFLAG) (result STATSTG, _ error) {
 		uintptr(unsafe.Pointer(&result)),
 		uintptr(flags),
 	)
-
 	if e := wingoes.ErrorFromHRESULT(wingoes.HRESULT(rc)); e.Failed() {
 		return result, e
 	}
@@ -354,7 +405,6 @@ func (abi *IStreamABI) Clone() (result *IUnknownABI, _ error) {
 		uintptr(unsafe.Pointer(abi)),
 		uintptr(unsafe.Pointer(&result)),
 	)
-
 	if e := wingoes.ErrorFromHRESULT(wingoes.HRESULT(rc)); e.Failed() {
 		return nil, e
 	}
@@ -443,23 +493,30 @@ func (o Stream) Clone() (result Stream, _ error) {
 
 const hrE_OUTOFMEMORY = wingoes.HRESULT(-((0x8007000E ^ 0xFFFFFFFF) + 1))
 
-// NewMemoryStream creates a new in-memory Stream object initially containing
-// initialBytes. Its seek pointer is guaranteed to be the start of the stream.
+// NewMemoryStream creates a new in-memory Stream object initially containing a
+// copy of initialBytes. Its seek pointer is guaranteed to reference the
+// beginning of the stream.
 func NewMemoryStream(initialBytes []byte) (result Stream, _ error) {
-	if len(initialBytes) > math.MaxInt32 {
+	maxInitialBytes := math.MaxUint32
+	if runtime.GOARCH == "386" {
+		// Win7 fallback would fail otherwise. Also, 4GiB would be bad on 32-bit arch!
+		maxInitialBytes = math.MaxInt32
+	}
+
+	if len(initialBytes) > maxInitialBytes {
 		return result, wingoes.ErrorFromHRESULT(hrE_OUTOFMEMORY)
 	}
 
-	// SHCreateMemStream is not safe to use until Windows 8.
+	// SHCreateMemStream exists on Win7 but is not safe for us to use until Win8.
 	if !wingoes.IsWin8OrGreater() {
 		return newMemoryStreamLegacy(initialBytes)
 	}
 
 	var base *byte
 	var length uint32
-	if l := len(initialBytes); l > 0 {
+	if l := uint32(len(initialBytes)); l > 0 {
 		base = &initialBytes[0]
-		length = uint32(l)
+		length = l
 	}
 
 	punk := shCreateMemStream(base, length)
@@ -468,19 +525,18 @@ func NewMemoryStream(initialBytes []byte) (result Stream, _ error) {
 	}
 
 	obj := result.Make(&punk).(Stream)
-	_, err := obj.Seek(0, io.SeekStart)
-	if err != nil {
+	if _, err := obj.Seek(0, io.SeekStart); err != nil {
 		return result, err
 	}
 
-	return obj, err
+	return obj, nil
 }
 
 func newMemoryStreamLegacy(initialBytes []byte) (result Stream, _ error) {
 	ppstream := NewABIReceiver()
 	hr := createStreamOnHGlobal(internal.HGLOBAL(0), true, ppstream)
-	if err := wingoes.ErrorFromHRESULT(hr); hr.Failed() {
-		return result, err
+	if e := wingoes.ErrorFromHRESULT(hr); e.Failed() {
+		return result, e
 	}
 
 	obj := result.Make(ppstream).(Stream)
@@ -488,8 +544,7 @@ func newMemoryStreamLegacy(initialBytes []byte) (result Stream, _ error) {
 		return obj, nil
 	}
 
-	err := obj.SetSize(uint64(len(initialBytes)))
-	if err != nil {
+	if err := obj.SetSize(uint64(len(initialBytes))); err != nil {
 		return result, err
 	}
 
@@ -501,10 +556,9 @@ func newMemoryStreamLegacy(initialBytes []byte) (result Stream, _ error) {
 		return result, io.ErrShortWrite
 	}
 
-	_, err = obj.Seek(0, io.SeekStart)
-	if err != nil {
+	if _, err := obj.Seek(0, io.SeekStart); err != nil {
 		return result, err
 	}
 
-	return obj, err
+	return obj, nil
 }

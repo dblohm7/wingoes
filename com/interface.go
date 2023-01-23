@@ -29,7 +29,7 @@ type IUnknownABI struct {
 	Vtbl *uintptr
 }
 
-func (abi IUnknownABI) vtable() *uintptr {
+func (abi *IUnknownABI) vtable() *uintptr {
 	return abi.Vtbl
 }
 

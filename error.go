@@ -31,6 +31,10 @@ const (
 	hrTYPE_E_WRONGTYPEKIND = HRESULT(-((0x8002802A ^ 0xFFFFFFFF) + 1))
 )
 
+// S_FALSE is a peculiar HRESULT value which means that the call executed
+// successfully, but returned false as its result.
+const S_FALSE = HRESULT(1)
+
 var (
 	// genericError encodes a Error whose message string is very generic.
 	genericError = Error(hresultFromFacilityAndCode(hrFail, facilityWin32, hrCode(windows.ERROR_UNIDENTIFIED_ERROR)))
