@@ -91,11 +91,11 @@ type Stream struct {
 }
 
 func (abi *ISequentialStreamABI) Read(p []byte) (int, error) {
-	// Because the syscall uses 32-bit values for length.
-	maxLen := math.MaxUint32
-	if runtime.GOARCH == "386" {
-		// Otherwise we cannot fit cbRead into the int return value.
-		maxLen = math.MaxInt32
+	// Otherwise we cannot fit cbRead into the int return value.
+	maxLen := math.MaxInt32
+	if runtime.GOARCH != "386" {
+		// Because the syscall uses 32-bit values for length.
+		maxLen = math.MaxUint32
 	}
 
 	if len(p) > maxLen {
@@ -127,11 +127,11 @@ func (abi *ISequentialStreamABI) Read(p []byte) (int, error) {
 }
 
 func (abi *ISequentialStreamABI) Write(p []byte) (int, error) {
-	// Because the syscall uses 32-bit values for length.
-	maxLen := math.MaxUint32
-	if runtime.GOARCH == "386" {
-		// Otherwise we cannot fit cbRead into the int return value.
-		maxLen = math.MaxInt32
+	// Otherwise we cannot fit cbRead into the int return value.
+	maxLen := math.MaxInt32
+	if runtime.GOARCH != "386" {
+		// Because the syscall uses 32-bit values for length.
+		maxLen = math.MaxUint32
 	}
 
 	if len(p) > maxLen {
@@ -497,10 +497,10 @@ const hrE_OUTOFMEMORY = wingoes.HRESULT(-((0x8007000E ^ 0xFFFFFFFF) + 1))
 // copy of initialBytes. Its seek pointer is guaranteed to reference the
 // beginning of the stream.
 func NewMemoryStream(initialBytes []byte) (result Stream, _ error) {
-	maxInitialBytes := math.MaxUint32
-	if runtime.GOARCH == "386" {
-		// Win7 fallback would fail otherwise. Also, 4GiB would be bad on 32-bit arch!
-		maxInitialBytes = math.MaxInt32
+	// Win7 fallback would fail otherwise. Also, 4GiB would be bad on 32-bit arch!
+	maxInitialBytes := math.MaxInt32
+	if runtime.GOARCH != "386" {
+		maxInitialBytes = math.MaxUint32
 	}
 
 	if len(initialBytes) > maxInitialBytes {
