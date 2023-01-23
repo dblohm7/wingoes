@@ -10,4 +10,4 @@ import (
 	"math"
 )
 
-const maxStreamRWLen = math.MaxUInt32
+const maxStreamRWLen = math.MaxUint32
