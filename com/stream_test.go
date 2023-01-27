@@ -13,11 +13,11 @@ import (
 )
 
 func TestStream(t *testing.T) {
-	t.Run("Default", func(t *testing.T) { MemoryStream(t, false) })
-	t.Run("Legacy", func(t *testing.T) { MemoryStream(t, true) })
+	t.Run("Default", func(t *testing.T) { memoryStream(t, false) })
+	t.Run("Legacy", func(t *testing.T) { memoryStream(t, true) })
 }
 
-func MemoryStream(t *testing.T, useLegacy bool) {
+func memoryStream(t *testing.T, useLegacy bool) {
 	testStreamForceLegacy = useLegacy
 	defer func() {
 		testStreamForceLegacy = false
