@@ -2,9 +2,7 @@ module github.com/dblohm7/wingoes
 
 go 1.18
 
-require golang.org/x/sys v0.0.0-20220310020820-b874c991c1a5
-
 require (
-	golang.org/x/mod v0.6.0-dev.0.20220419223038-86c51ed26bb4 // indirect
-	golang.org/x/tools v0.1.11 // indirect
+	golang.org/x/exp v0.0.0-20230127140709-cafedaf64729
+	golang.org/x/sys v0.1.0
 )

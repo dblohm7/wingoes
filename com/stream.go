@@ -90,10 +90,8 @@ type Stream struct {
 }
 
 func (abi *ISequentialStreamABI) Read(p []byte) (int, error) {
-	maxLen := maxStreamRWLen
-
-	if len(p) > maxLen {
-		p = p[:maxLen]
+	if len(p) > maxStreamRWLen {
+		p = p[:maxStreamRWLen]
 	}
 
 	var cbRead uint32
@@ -106,25 +104,25 @@ func (abi *ISequentialStreamABI) Read(p []byte) (int, error) {
 		uintptr(uint32(len(p))),
 		uintptr(unsafe.Pointer(&cbRead)),
 	)
+	n := int(cbRead)
 	e := wingoes.ErrorFromHRESULT(wingoes.HRESULT(rc))
 	if e.Failed() {
-		return 0, e
+		return n, e
 	}
 
 	// Various implementations of IStream handle EOF differently. We need to
 	// deal with both.
-	if e.AsHRESULT() == wingoes.S_FALSE || (cbRead == 0 && len(p) > 0) {
-		return int(cbRead), io.EOF
+	if e.AsHRESULT() == wingoes.S_FALSE || (n == 0 && len(p) > 0) {
+		return n, io.EOF
 	}
 
-	return int(cbRead), nil
+	return n, nil
 }
 
 func (abi *ISequentialStreamABI) Write(p []byte) (int, error) {
-	maxLen := maxStreamRWLen
-
-	if len(p) > maxLen {
-		p = p[:maxLen]
+	w := p
+	if len(w) > maxStreamRWLen {
+		w = w[:maxStreamRWLen]
 	}
 
 	var cbWritten uint32
@@ -133,15 +131,21 @@ func (abi *ISequentialStreamABI) Write(p []byte) (int, error) {
 	rc, _, _ := syscall.SyscallN(
 		method,
 		uintptr(unsafe.Pointer(abi)),
-		uintptr(unsafe.Pointer(&p[0])),
-		uintptr(uint32(len(p))),
+		uintptr(unsafe.Pointer(&w[0])),
+		uintptr(uint32(len(w))),
 		uintptr(unsafe.Pointer(&cbWritten)),
 	)
+	n := int(cbWritten)
 	if e := wingoes.ErrorFromHRESULT(wingoes.HRESULT(rc)); e.Failed() {
-		return 0, e
+		return n, e
 	}
 
-	return int(cbWritten), nil
+	// Need this to satisfy Writer.
+	if n < len(p) {
+		return n, io.ErrShortWrite
+	}
+
+	return n, nil
 }
 
 func (o SequentialStream) GetIID() *IID {
@@ -482,6 +486,8 @@ func (o Stream) Clone() (result Stream, _ error) {
 
 const hrE_OUTOFMEMORY = wingoes.HRESULT(-((0x8007000E ^ 0xFFFFFFFF) + 1))
 
+var testStreamForceLegacy bool
+
 // NewMemoryStream creates a new in-memory Stream object initially containing a
 // copy of initialBytes. Its seek pointer is guaranteed to reference the
 // beginning of the stream.
@@ -491,7 +497,7 @@ func NewMemoryStream(initialBytes []byte) (result Stream, _ error) {
 	}
 
 	// SHCreateMemStream exists on Win7 but is not safe for us to use until Win8.
-	if !wingoes.IsWin8OrGreater() {
+	if testStreamForceLegacy || !wingoes.IsWin8OrGreater() {
 		return newMemoryStreamLegacy(initialBytes)
 	}
 
@@ -531,12 +537,9 @@ func newMemoryStreamLegacy(initialBytes []byte) (result Stream, _ error) {
 		return result, err
 	}
 
-	n, err := obj.Write(initialBytes)
+	_, err := obj.Write(initialBytes)
 	if err != nil {
 		return result, err
-	}
-	if n != len(initialBytes) {
-		return result, io.ErrShortWrite
 	}
 
 	if _, err := obj.Seek(0, io.SeekStart); err != nil {
