@@ -225,7 +225,7 @@ func memoryStream(t *testing.T, useLegacy bool) {
 		t.Errorf("Slices not equal")
 	}
 
-	if wstream.UnsafeUnwrap() == stream2.UnsafeUnwrap() {
+	if stream.UnsafeUnwrap() == stream2.UnsafeUnwrap() {
 		t.Errorf("Cloned streams wrap identical interface pointers")
 	}
 }
