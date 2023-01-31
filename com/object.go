@@ -21,10 +21,10 @@ func (o GenericObject[A]) pp() **A {
 // Object is the interface that all garbage-collected instances of COM interfaces
 // must implement.
 type Object interface {
-	// GetIID returns the interface ID for the object. This method may be called
+	// IID returns the interface ID for the object. This method may be called
 	// on Objects containing the zero value, so its return value must not depend
 	// on the value of the method's receiver.
-	GetIID() *IID
+	IID() *IID
 
 	// Make converts r to an instance of a garbage-collected COM object. The type
 	// of its return value must always match the type of the method's receiver.
@@ -34,6 +34,7 @@ type Object interface {
 // EmbedsGenericObject is a type constraint matching any struct that embeds
 // a GenericObject[A].
 type EmbedsGenericObject[A ABI] interface {
+	Object
 	~struct{ GenericObject[A] }
 	pp() **A
 }
@@ -52,7 +53,7 @@ func As[O Object, A ABI, PU PUnknown[A], E EmbedsGenericObject[A]](obj E) O {
 func TryAs[O Object, A ABI, PU PUnknown[A], E EmbedsGenericObject[A]](obj E) (O, error) {
 	var o O
 
-	iid := o.GetIID()
+	iid := o.IID()
 	p := (PU)(unsafe.Pointer(*(obj.pp())))
 
 	i, err := p.QueryInterface(iid)
@@ -64,4 +65,23 @@ func TryAs[O Object, A ABI, PU PUnknown[A], E EmbedsGenericObject[A]](obj E) (O,
 	*r = i.(*IUnknownABI)
 
 	return o.Make(r).(O), nil
+}
+
+// IsSameObject returns true when both l and r refer to the same underlying object.
+func IsSameObject[AL, AR ABI, PL PUnknown[AL], PR PUnknown[AR], EL EmbedsGenericObject[AL], ER EmbedsGenericObject[AR]](l EL, r ER) bool {
+	pl := (PL)(unsafe.Pointer(*(l.pp())))
+	ul, err := pl.QueryInterface(IID_IUnknown)
+	if err != nil {
+		return false
+	}
+	defer ul.Release()
+
+	pr := (PR)(unsafe.Pointer(*(r.pp())))
+	ur, err := pr.QueryInterface(IID_IUnknown)
+	if err != nil {
+		return false
+	}
+	defer ur.Release()
+
+	return ul.(*IUnknownABI) == ur.(*IUnknownABI)
 }

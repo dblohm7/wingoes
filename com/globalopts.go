@@ -84,7 +84,7 @@ func (abi *IGlobalOptionsABI) Query(prop GLOBALOPT_PROPERTIES) (uintptr, error) 
 	return result, nil
 }
 
-func (o GlobalOptions) GetIID() *IID {
+func (o GlobalOptions) IID() *IID {
 	return IID_IGlobalOptions
 }
 

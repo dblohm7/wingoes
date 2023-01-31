@@ -148,7 +148,7 @@ func (abi *ISequentialStreamABI) Write(p []byte) (int, error) {
 	return n, nil
 }
 
-func (o SequentialStream) GetIID() *IID {
+func (o SequentialStream) IID() *IID {
 	return IID_ISequentialStream
 }
 
@@ -405,7 +405,7 @@ func (abi *IStreamABI) Clone() (result *IUnknownABI, _ error) {
 	return result, nil
 }
 
-func (o Stream) GetIID() *IID {
+func (o Stream) IID() *IID {
 	return IID_IStream
 }
 
@@ -529,12 +529,13 @@ func newMemoryStreamLegacy(initialBytes []byte) (result Stream, _ error) {
 	}
 
 	obj := result.Make(ppstream).(Stream)
-	if len(initialBytes) == 0 {
-		return obj, nil
-	}
 
 	if err := obj.SetSize(uint64(len(initialBytes))); err != nil {
 		return result, err
+	}
+
+	if len(initialBytes) == 0 {
+		return obj, nil
 	}
 
 	_, err := obj.Write(initialBytes)

@@ -108,7 +108,7 @@ func IsCurrentOSThreadMTA() bool {
 func createInstanceWithCLSCTX[T Object](clsid *CLSID, clsctx coCLSCTX) (T, error) {
 	var t T
 
-	iid := t.GetIID()
+	iid := t.IID()
 	ppunk := NewABIReceiver()
 
 	hr := coCreateInstance(

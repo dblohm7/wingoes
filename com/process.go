@@ -14,7 +14,7 @@ import (
 
 // ProcessType is an enumeration that specifies the type of the current process
 // when calling StartRuntime.
-type ProcessType uint32
+type ProcessType uint
 
 const (
 	// ConsoleApp is a text-mode Windows program.

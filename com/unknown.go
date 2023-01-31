@@ -17,8 +17,8 @@ type ObjectBase struct {
 	GenericObject[IUnknownABI]
 }
 
-// GetIID always returns IID_IUnknown.
-func (o ObjectBase) GetIID() *IID {
+// IID always returns IID_IUnknown.
+func (o ObjectBase) IID() *IID {
 	return IID_IUnknown
 }
 
