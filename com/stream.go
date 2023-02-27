@@ -486,18 +486,20 @@ func (o Stream) Clone() (result Stream, _ error) {
 
 const hrE_OUTOFMEMORY = wingoes.HRESULT(-((0x8007000E ^ 0xFFFFFFFF) + 1))
 
-var testStreamForceLegacy bool
-
 // NewMemoryStream creates a new in-memory Stream object initially containing a
 // copy of initialBytes. Its seek pointer is guaranteed to reference the
 // beginning of the stream.
 func NewMemoryStream(initialBytes []byte) (result Stream, _ error) {
+	return newMemoryStreamInternal(initialBytes, false)
+}
+
+func newMemoryStreamInternal(initialBytes []byte, forceLegacy bool) (result Stream, _ error) {
 	if len(initialBytes) > maxStreamRWLen {
 		return result, wingoes.ErrorFromHRESULT(hrE_OUTOFMEMORY)
 	}
 
 	// SHCreateMemStream exists on Win7 but is not safe for us to use until Win8.
-	if testStreamForceLegacy || !wingoes.IsWin8OrGreater() {
+	if forceLegacy || !wingoes.IsWin8OrGreater() {
 		return newMemoryStreamLegacy(initialBytes)
 	}
 
