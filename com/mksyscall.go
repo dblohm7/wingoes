@@ -11,7 +11,6 @@ package com
 //sys coGetApartmentType(aptType *coAPTTYPE, qual *coAPTTYPEQUALIFIER) (hr wingoes.HRESULT) = ole32.CoGetApartmentType
 //sys coInitializeEx(reserved uintptr, flags uint32) (hr wingoes.HRESULT) = ole32.CoInitializeEx
 //sys coInitializeSecurity(sd *windows.SECURITY_DESCRIPTOR, authSvcLen int32, authSvc *soleAuthenticationService, reserved1 uintptr, authnLevel rpcAuthnLevel, impLevel rpcImpersonationLevel, authList *soleAuthenticationList, capabilities authCapabilities, reserved2 uintptr) (hr wingoes.HRESULT) = ole32.CoInitializeSecurity
-//sys CoTaskMemFree(pv unsafe.Pointer) = ole32.CoTaskMemFree
 
 // We don't use '?' on coIncrementMTAUsage because that doesn't play nicely with HRESULTs. We manually check for its presence in process.go
 //sys coIncrementMTAUsage(cookie *coMTAUsageCookie) (hr wingoes.HRESULT) = ole32.CoIncrementMTAUsage

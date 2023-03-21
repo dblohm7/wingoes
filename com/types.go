@@ -128,7 +128,7 @@ type COMAllocatedString uintptr
 
 // Close frees the memory held by the string.
 func (s *COMAllocatedString) Close() error {
-	CoTaskMemFree(unsafe.Pointer(*s))
+	windows.CoTaskMemFree(unsafe.Pointer(*s))
 	*s = 0
 	return nil
 }

@@ -49,7 +49,6 @@ var (
 	procCoIncrementMTAUsage   = modole32.NewProc("CoIncrementMTAUsage")
 	procCoInitializeEx        = modole32.NewProc("CoInitializeEx")
 	procCoInitializeSecurity  = modole32.NewProc("CoInitializeSecurity")
-	procCoTaskMemFree         = modole32.NewProc("CoTaskMemFree")
 	procCreateStreamOnHGlobal = modole32.NewProc("CreateStreamOnHGlobal")
 	procSetOaNoCache          = modoleaut32.NewProc("SetOaNoCache")
 	procSHCreateMemStream     = modshlwapi.NewProc("SHCreateMemStream")
@@ -82,11 +81,6 @@ func coInitializeEx(reserved uintptr, flags uint32) (hr wingoes.HRESULT) {
 func coInitializeSecurity(sd *windows.SECURITY_DESCRIPTOR, authSvcLen int32, authSvc *soleAuthenticationService, reserved1 uintptr, authnLevel rpcAuthnLevel, impLevel rpcImpersonationLevel, authList *soleAuthenticationList, capabilities authCapabilities, reserved2 uintptr) (hr wingoes.HRESULT) {
 	r0, _, _ := syscall.Syscall9(procCoInitializeSecurity.Addr(), 9, uintptr(unsafe.Pointer(sd)), uintptr(authSvcLen), uintptr(unsafe.Pointer(authSvc)), uintptr(reserved1), uintptr(authnLevel), uintptr(impLevel), uintptr(unsafe.Pointer(authList)), uintptr(capabilities), uintptr(reserved2))
 	hr = wingoes.HRESULT(r0)
-	return
-}
-
-func CoTaskMemFree(pv unsafe.Pointer) {
-	syscall.Syscall(procCoTaskMemFree.Addr(), 1, uintptr(pv), 0, 0)
 	return
 }
 
