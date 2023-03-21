@@ -7,5 +7,5 @@
 package wingoes
 
 import (
-	_ "golang.org/x/tools/cmd/goimports"
+	_ "golang.org/x/tools/imports"
 )

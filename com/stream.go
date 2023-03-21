@@ -376,17 +376,18 @@ func (abi *IStreamABI) UnlockRegion(offset, numBytes uint64, lockType LOCKTYPE) 
 	return nil
 }
 
-func (abi *IStreamABI) Stat(flags STATFLAG) (result STATSTG, _ error) {
+func (abi *IStreamABI) Stat(flags STATFLAG) (*STATSTG, error) {
+	result := new(STATSTG)
 	method := unsafe.Slice(abi.Vtbl, 14)[12]
 
 	rc, _, _ := syscall.SyscallN(
 		method,
 		uintptr(unsafe.Pointer(abi)),
-		uintptr(unsafe.Pointer(&result)),
+		uintptr(unsafe.Pointer(result)),
 		uintptr(flags),
 	)
 	if e := wingoes.ErrorFromHRESULT(wingoes.HRESULT(rc)); e.Failed() {
-		return result, e
+		return nil, e
 	}
 
 	return result, nil
@@ -471,7 +472,7 @@ func (o Stream) UnlockRegion(offset, numBytes uint64, lockType LOCKTYPE) error {
 	return p.UnlockRegion(offset, numBytes, lockType)
 }
 
-func (o Stream) Stat(flags STATFLAG) (result STATSTG, _ error) {
+func (o Stream) Stat(flags STATFLAG) (*STATSTG, error) {
 	p := *(o.Pp)
 	return p.Stat(flags)
 }
