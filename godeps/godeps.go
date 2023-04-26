@@ -2,10 +2,10 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-//go:build windows
+//go:build go_mod_tidy_deps
 
-package wingoes
+package godeps
 
 import (
-	_ "golang.org/x/tools/imports"
+	_ "golang.org/x/tools/cmd/goimports"
 )
