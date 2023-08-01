@@ -141,8 +141,8 @@ func TestFileVsModule(t *testing.T) {
 
 	// TODO(aaron): flesh out this test as (*PEInfo)DataDirectoryEntry is fleshed out
 	// Compare some DataDirectory stuff between file and module. Note that
-	// dpe.IMAGE_DIRECTORY_ENTRY_SECURITY is unavailable in modules.
-	ddIdx := dpe.IMAGE_DIRECTORY_ENTRY_DEBUG
+	// IMAGE_DIRECTORY_ENTRY_SECURITY is unavailable in modules.
+	ddIdx := IMAGE_DIRECTORY_ENTRY_DEBUG
 	dbgInfoFileAny, err := pef.DataDirectoryEntry(ddIdx)
 	if err != nil {
 		if err != ErrNotPresent {

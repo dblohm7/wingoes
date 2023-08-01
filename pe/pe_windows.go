@@ -22,18 +22,18 @@ import (
 	"golang.org/x/sys/windows"
 )
 
-// PEInfo represents the partially-parsed headers from a PE binary.
-type PEInfo struct {
+// PEHeaders represents the partially-parsed headers from a PE binary.
+type PEHeaders struct {
 	r              peReader
 	fileHeader     *dpe.FileHeader
 	optionalHeader *optionalHeader
 	sections       []peSectionHeader
 }
 
+// The following constants are from the PE spec
 const (
-	offsetIMAGE_DOS_HEADERe_lfanew = 60
-	sizeIMAGE_DOS_HEADER           = 64
-	maxNumSections                 = 96 // per PE spec
+	offsetIMAGE_DOS_HEADERe_lfanew = 0x3C
+	maxNumSections                 = 96
 )
 
 var (
@@ -46,20 +46,18 @@ var (
 	ErrUnsupportedMachine  = errors.New("unsupported machine")
 )
 
-type pe struct {
-	base           uintptr
-	limit          uintptr
-	fileHeader     *dpe.FileHeader
-	optionalHeader *optionalHeader
+type peBounds struct {
+	base  uintptr
+	limit uintptr
 }
 
 type peFile struct {
 	*os.File
-	pe
+	peBounds
 }
 
 func (pef *peFile) Base() uintptr {
-	return pef.pe.base
+	return pef.peBounds.base
 }
 
 func (pef *peFile) Limit() uintptr {
@@ -73,11 +71,11 @@ func (pef *peFile) Limit() uintptr {
 
 type peModule struct {
 	*bytes.Reader
-	pe
+	peBounds
 }
 
 func (pei *peModule) Base() uintptr {
-	return pei.pe.base
+	return pei.peBounds.base
 }
 
 func (pei *peModule) Close() error {
@@ -94,24 +92,24 @@ func (pei *peModule) Limit() uintptr {
 // NewPEFromBaseAddressAndSize parses the headers in a PE binary loaded
 // into the current process's address space at address baseAddr with known
 // size. If you do not have the size, use NewPEFromBaseAddress instead.
-// Upon success it returns a non-nil *PEInfo, otherwise it returns a nil *PEInfo
-// and a non-nil error.
-// If the module is unloaded while the returned *PEInfo is still in use,
+// Upon success it returns a non-nil *PEHeaders, otherwise it returns a nil
+// *PEHeaders and a non-nil error.
+// If the module is unloaded while the returned *PEHeaders is still in use,
 // its behaviour will become undefined.
-func NewPEFromBaseAddressAndSize(baseAddr, size uintptr) (*PEInfo, error) {
+func NewPEFromBaseAddressAndSize(baseAddr, size uintptr) (*PEHeaders, error) {
 	slc := unsafe.Slice((*byte)(unsafe.Pointer(baseAddr)), size)
 	r := bytes.NewReader(slc)
-	peMod := &peModule{Reader: r, pe: pe{base: baseAddr, limit: baseAddr + size}}
+	peMod := &peModule{Reader: r, peBounds: peBounds{base: baseAddr, limit: baseAddr + size}}
 	return loadHeaders(peMod)
 }
 
 // NewPEFromBaseAddress parses the headers in a PE binary loaded into the
 // current process's address space at address baseAddr.
-// Upon success it returns a non-nil *PEInfo, otherwise it returns a nil *PEInfo
-// and a non-nil error.
-// If the module is unloaded while the returned *PEInfo is still in use,
+// Upon success it returns a non-nil *PEHeaders, otherwise it returns a nil
+// *PEHeaders and a non-nil error.
+// If the module is unloaded while the returned *PEHeaders is still in use,
 // its behaviour will become undefined.
-func NewPEFromBaseAddress(baseAddr uintptr) (*PEInfo, error) {
+func NewPEFromBaseAddress(baseAddr uintptr) (*PEHeaders, error) {
 	var modInfo windows.ModuleInfo
 	if err := windows.GetModuleInformation(
 		windows.CurrentProcess(),
@@ -127,19 +125,19 @@ func NewPEFromBaseAddress(baseAddr uintptr) (*PEInfo, error) {
 
 // NewPEFromHMODULE parses the headers in a PE binary identified by hmodule that
 // is currently loaded into the current process's address space.
-// Upon success it returns a non-nil *PEInfo, otherwise it returns a nil *PEInfo
-// and a non-nil error.
-// If the module is unloaded while the returned *PEInfo is still in use,
+// Upon success it returns a non-nil *PEHeaders, otherwise it returns a nil
+// *PEHeaders and a non-nil error.
+// If the module is unloaded while the returned *PEHeaders is still in use,
 // its behaviour will become undefined.
-func NewPEFromHMODULE(hmodule windows.Handle) (*PEInfo, error) {
+func NewPEFromHMODULE(hmodule windows.Handle) (*PEHeaders, error) {
 	return NewPEFromBaseAddress(uintptr(hmodule) & ^uintptr(3))
 }
 
 // NewPEFromFileName opens a PE binary located at filename and parses its PE
-// headers. Upon success it returns a non-nil *PEInfo, otherwise it returns a
-// nil *PEInfo and a non-nil error.
-// Call Close() on the returned *PEInfo when it is no longer needed.
-func NewPEFromFileName(filename string) (*PEInfo, error) {
+// headers. Upon success it returns a non-nil *PEHeaders, otherwise it returns a
+// nil *PEHeaders and a non-nil error.
+// Call Close() on the returned *PEHeaders when it is no longer needed.
+func NewPEFromFileName(filename string) (*PEHeaders, error) {
 	f, err := os.Open(filename)
 	if err != nil {
 		return nil, err
@@ -148,17 +146,18 @@ func NewPEFromFileName(filename string) (*PEInfo, error) {
 	return newPEFromFile(f)
 }
 
-func newPEFromFile(f *os.File) (*PEInfo, error) {
+func newPEFromFile(f *os.File) (*PEHeaders, error) {
+	// peBounds base is 0, limit is loaded lazily
 	pef := &peFile{File: f}
 	return loadHeaders(pef)
 }
 
 // NewPEFromFileHandle parses the PE headers from hfile, an open Win32 file handle.
 // It does *not* consume hfile.
-// Upon success it returns a non-nil *PEInfo, otherwise it returns a
-// nil *PEInfo and a non-nil error.
-// Call Close() on the returned *PEInfo when it is no longer needed.
-func NewPEFromFileHandle(hfile windows.Handle) (*PEInfo, error) {
+// Upon success it returns a non-nil *PEHeaders, otherwise it returns a
+// nil *PEHeaders and a non-nil error.
+// Call Close() on the returned *PEHeaders when it is no longer needed.
+func NewPEFromFileHandle(hfile windows.Handle) (*PEHeaders, error) {
 	// Duplicate hfile so that we don't consume it.
 	var hfileDup windows.Handle
 	cp := windows.CurrentProcess()
@@ -198,26 +197,25 @@ func addOffset[O constraints.Integer](base uintptr, off O) uintptr {
 }
 
 func readStruct[T any, O constraints.Integer](r peReader, rva O) (*T, error) {
-	szT := unsafe.Sizeof(*((*T)(nil)))
 	switch v := r.(type) {
 	case *peFile:
-		buf := make([]byte, szT)
-		n, err := r.ReadAt(buf, int64(rva))
-		if err != nil {
-			if err == io.EOF {
-				return nil, ErrInvalidBinary
-			}
+		if _, err := r.Seek(int64(rva), io.SeekStart); err != nil {
 			return nil, err
 		}
-		if n != len(buf) {
-			return nil, ErrInvalidBinary
+
+		result := new(T)
+		if err := binary.Read(r, binary.LittleEndian, result); err != nil {
+			return nil, err
 		}
-		return (*T)(unsafe.Pointer(&buf[0])), nil
+
+		return result, nil
 	case *peModule:
 		addr := addOffset(r.Base(), rva)
+		szT := unsafe.Sizeof(*((*T)(nil)))
 		if addr+szT >= v.Limit() {
 			return nil, ErrInvalidBinary
 		}
+
 		return (*T)(unsafe.Pointer(addr)), nil
 	default:
 		return nil, os.ErrInvalid
@@ -225,26 +223,25 @@ func readStruct[T any, O constraints.Integer](r peReader, rva O) (*T, error) {
 }
 
 func readStructArray[T any, O constraints.Integer](r peReader, rva O, count int) ([]T, error) {
-	szT := reflect.ArrayOf(count, reflect.TypeOf((*T)(nil)).Elem()).Size()
 	switch v := r.(type) {
 	case *peFile:
-		buf := make([]byte, szT)
-		n, err := r.ReadAt(buf, int64(rva))
-		if err != nil {
-			if err == io.EOF {
-				return nil, ErrInvalidBinary
-			}
+		if _, err := r.Seek(int64(rva), io.SeekStart); err != nil {
 			return nil, err
 		}
-		if n != len(buf) {
-			return nil, ErrInvalidBinary
+
+		result := make([]T, count)
+		if err := binary.Read(r, binary.LittleEndian, result); err != nil {
+			return nil, err
 		}
-		return unsafe.Slice((*T)(unsafe.Pointer(&buf[0])), count), nil
+
+		return result, nil
 	case *peModule:
 		addr := addOffset(r.Base(), rva)
+		szT := reflect.ArrayOf(count, reflect.TypeOf((*T)(nil)).Elem()).Size()
 		if addr+szT >= v.Limit() {
 			return nil, ErrInvalidBinary
 		}
+
 		return unsafe.Slice((*T)(unsafe.Pointer(addr)), count), nil
 	default:
 		return nil, os.ErrInvalid
@@ -265,7 +262,7 @@ func (s *peSectionHeader) NameAsString() string {
 	return string(s.Name[:])
 }
 
-func loadHeaders(r peReader) (*PEInfo, error) {
+func loadHeaders(r peReader) (*PEHeaders, error) {
 	// Do some initial verification first
 	var mz [2]byte
 	if _, err := r.ReadAt(mz[:], 0); err != nil {
@@ -290,29 +287,60 @@ func loadHeaders(r peReader) (*PEInfo, error) {
 		return nil, ErrInvalidBinary
 	}
 
-	var peMagic [4]byte
-	if _, err := r.ReadAt(peMagic[:], int64(e_lfanew)); err != nil {
+	var peSig [4]byte
+	if _, err := r.ReadAt(peSig[:], int64(e_lfanew)); err != nil {
 		return nil, err
 	}
-	if peMagic[0] != 'P' || peMagic[1] != 'E' || peMagic[2] != 0 || peMagic[3] != 0 {
+	if peSig[0] != 'P' || peSig[1] != 'E' || peSig[2] != 0 || peSig[3] != 0 {
 		return nil, ErrInvalidBinary
 	}
 
-	fileHeaderOffset := uintptr(e_lfanew) + unsafe.Sizeof(peMagic)
+	fileHeaderOffset := uintptr(e_lfanew) + unsafe.Sizeof(peSig)
 	fileHeader, err := readStruct[dpe.FileHeader](r, fileHeaderOffset)
 	if err != nil {
 		return nil, err
 	}
-	if fileHeader.Machine != expectedMachine {
+
+	// In-memory modules should always have a machine type that matches our own.
+	// (okay, so that's kinda, sorta, untrue with respect to WOW64, but that's
+	// a _very_ obscure use case).
+	_, isModule := r.(*peModule)
+	// TODO(aaron): Uncomment once we can read binaries from disk whose archs
+	// do not necessarily match our own.
+	if /*isModule &&*/ fileHeader.Machine != expectedMachine {
 		return nil, ErrUnsupportedMachine
 	}
 
 	optionalHeaderOffset := fileHeaderOffset + unsafe.Sizeof(dpe.FileHeader{})
+	// TODO(aaron): parameterize optional header type so we can read binaries
+	// from disk whose archs do not necessarily match our own.
 	optionalHeader, err := readStruct[optionalHeader](r, optionalHeaderOffset)
 	if err != nil {
 		return nil, err
 	}
-	if optionalHeader.Magic != optionalHeaderMagic {
+
+	expectedOptionalHeaderMagic := uint16(optionalHeaderMagic)
+	if !isModule {
+		switch fileHeader.Machine {
+		case dpe.IMAGE_FILE_MACHINE_I386:
+			expectedOptionalHeaderMagic = 0x010B
+		case dpe.IMAGE_FILE_MACHINE_AMD64, dpe.IMAGE_FILE_MACHINE_ARM64:
+			expectedOptionalHeaderMagic = 0x020B
+		default:
+			return nil, ErrUnsupportedMachine
+		}
+	}
+
+	if optionalHeader.Magic != expectedOptionalHeaderMagic {
+		return nil, ErrInvalidBinary
+	}
+
+	// Coarse-grained check that header sizes make sense
+	totalEssentialHeaderLen := uint32(offsetIMAGE_DOS_HEADERe_lfanew) +
+		uint32(unsafe.Sizeof(int32(0))) + // e_lfanew itself
+		uint32(unsafe.Sizeof(*fileHeader)) +
+		uint32(fileHeader.SizeOfOptionalHeader)
+	if optionalHeader.SizeOfImage < totalEssentialHeaderLen {
 		return nil, ErrInvalidBinary
 	}
 
@@ -327,10 +355,10 @@ func loadHeaders(r peReader) (*PEInfo, error) {
 		return nil, err
 	}
 
-	return &PEInfo{r: r, fileHeader: fileHeader, optionalHeader: optionalHeader, sections: sections}, nil
+	return &PEHeaders{r: r, fileHeader: fileHeader, optionalHeader: optionalHeader, sections: sections}, nil
 }
 
-func resolveRVA[O constraints.Integer](nfo *PEInfo, rva O) int64 {
+func resolveRVA[O constraints.Integer](nfo *PEHeaders, rva O) int64 {
 	if _, ok := nfo.r.(*peFile); !ok {
 		return int64(rva)
 	}
@@ -354,7 +382,9 @@ func resolveRVA[O constraints.Integer](nfo *PEInfo, rva O) int64 {
 	return 0
 }
 
-func (nfo *PEInfo) dataDirectory() []dpe.DataDirectory {
+type DataDirectoryEntry = dpe.DataDirectory
+
+func (nfo *PEHeaders) dataDirectory() []DataDirectoryEntry {
 	cnt := nfo.optionalHeader.NumberOfRvaAndSizes
 	if maxCnt := uint32(len(nfo.optionalHeader.DataDirectory)); cnt > maxCnt {
 		cnt = maxCnt
@@ -362,39 +392,42 @@ func (nfo *PEInfo) dataDirectory() []dpe.DataDirectory {
 	return nfo.optionalHeader.DataDirectory[:cnt]
 }
 
+// DataDirectoryIndex is an enumeration specifying a particular entry in the
+// data directory.
+type DataDirectoryIndex int
+
 const (
-	IMAGE_DIRECTORY_ENTRY_EXPORT         = dpe.IMAGE_DIRECTORY_ENTRY_EXPORT
-	IMAGE_DIRECTORY_ENTRY_IMPORT         = dpe.IMAGE_DIRECTORY_ENTRY_IMPORT
-	IMAGE_DIRECTORY_ENTRY_RESOURCE       = dpe.IMAGE_DIRECTORY_ENTRY_RESOURCE
-	IMAGE_DIRECTORY_ENTRY_EXCEPTION      = dpe.IMAGE_DIRECTORY_ENTRY_EXCEPTION
-	IMAGE_DIRECTORY_ENTRY_SECURITY       = dpe.IMAGE_DIRECTORY_ENTRY_SECURITY
-	IMAGE_DIRECTORY_ENTRY_BASERELOC      = dpe.IMAGE_DIRECTORY_ENTRY_BASERELOC
-	IMAGE_DIRECTORY_ENTRY_DEBUG          = dpe.IMAGE_DIRECTORY_ENTRY_DEBUG
-	IMAGE_DIRECTORY_ENTRY_ARCHITECTURE   = dpe.IMAGE_DIRECTORY_ENTRY_ARCHITECTURE
-	IMAGE_DIRECTORY_ENTRY_GLOBALPTR      = dpe.IMAGE_DIRECTORY_ENTRY_GLOBALPTR
-	IMAGE_DIRECTORY_ENTRY_TLS            = dpe.IMAGE_DIRECTORY_ENTRY_TLS
-	IMAGE_DIRECTORY_ENTRY_LOAD_CONFIG    = dpe.IMAGE_DIRECTORY_ENTRY_LOAD_CONFIG
-	IMAGE_DIRECTORY_ENTRY_BOUND_IMPORT   = dpe.IMAGE_DIRECTORY_ENTRY_BOUND_IMPORT
-	IMAGE_DIRECTORY_ENTRY_IAT            = dpe.IMAGE_DIRECTORY_ENTRY_IAT
-	IMAGE_DIRECTORY_ENTRY_DELAY_IMPORT   = dpe.IMAGE_DIRECTORY_ENTRY_DELAY_IMPORT
-	IMAGE_DIRECTORY_ENTRY_COM_DESCRIPTOR = dpe.IMAGE_DIRECTORY_ENTRY_COM_DESCRIPTOR
+	IMAGE_DIRECTORY_ENTRY_EXPORT         = DataDirectoryIndex(dpe.IMAGE_DIRECTORY_ENTRY_EXPORT)
+	IMAGE_DIRECTORY_ENTRY_IMPORT         = DataDirectoryIndex(dpe.IMAGE_DIRECTORY_ENTRY_IMPORT)
+	IMAGE_DIRECTORY_ENTRY_RESOURCE       = DataDirectoryIndex(dpe.IMAGE_DIRECTORY_ENTRY_RESOURCE)
+	IMAGE_DIRECTORY_ENTRY_EXCEPTION      = DataDirectoryIndex(dpe.IMAGE_DIRECTORY_ENTRY_EXCEPTION)
+	IMAGE_DIRECTORY_ENTRY_SECURITY       = DataDirectoryIndex(dpe.IMAGE_DIRECTORY_ENTRY_SECURITY)
+	IMAGE_DIRECTORY_ENTRY_BASERELOC      = DataDirectoryIndex(dpe.IMAGE_DIRECTORY_ENTRY_BASERELOC)
+	IMAGE_DIRECTORY_ENTRY_DEBUG          = DataDirectoryIndex(dpe.IMAGE_DIRECTORY_ENTRY_DEBUG)
+	IMAGE_DIRECTORY_ENTRY_ARCHITECTURE   = DataDirectoryIndex(dpe.IMAGE_DIRECTORY_ENTRY_ARCHITECTURE)
+	IMAGE_DIRECTORY_ENTRY_GLOBALPTR      = DataDirectoryIndex(dpe.IMAGE_DIRECTORY_ENTRY_GLOBALPTR)
+	IMAGE_DIRECTORY_ENTRY_TLS            = DataDirectoryIndex(dpe.IMAGE_DIRECTORY_ENTRY_TLS)
+	IMAGE_DIRECTORY_ENTRY_LOAD_CONFIG    = DataDirectoryIndex(dpe.IMAGE_DIRECTORY_ENTRY_LOAD_CONFIG)
+	IMAGE_DIRECTORY_ENTRY_BOUND_IMPORT   = DataDirectoryIndex(dpe.IMAGE_DIRECTORY_ENTRY_BOUND_IMPORT)
+	IMAGE_DIRECTORY_ENTRY_IAT            = DataDirectoryIndex(dpe.IMAGE_DIRECTORY_ENTRY_IAT)
+	IMAGE_DIRECTORY_ENTRY_DELAY_IMPORT   = DataDirectoryIndex(dpe.IMAGE_DIRECTORY_ENTRY_DELAY_IMPORT)
+	IMAGE_DIRECTORY_ENTRY_COM_DESCRIPTOR = DataDirectoryIndex(dpe.IMAGE_DIRECTORY_ENTRY_COM_DESCRIPTOR)
 )
 
 // DataDirectoryEntry returns information from nfo's data directory at index idx.
-// idx must be one of the IMAGE_DIRECTORY_ENTRY_* constants in the debug/pe package.
 // The type of the return value depends on the value of idx. Most values for idx
-// currently return the debug/pe.DataDirectory entry itself, however the
-// following idx values, when present, return more sophisticated information:
+// currently return the DataDirectoryEntry itself, however it will return more
+// sophisticated information for the following values of idx:
 //
-// debug/pe.IMAGE_DIRECTORY_ENTRY_SECURITY returns []AuthenticodeCert;
-// debug/pe.IMAGE_DIRECTORY_ENTRY_DEBUG returns []IMAGE_DEBUG_DIRECTORY
+// IMAGE_DIRECTORY_ENTRY_SECURITY returns []AuthenticodeCert
+// IMAGE_DIRECTORY_ENTRY_DEBUG returns []IMAGE_DEBUG_DIRECTORY
 //
-// Note that other idx values WILL be modified in the future to support more
+// Note that other idx values _will_ be modified in the future to support more
 // sophisticated return values, so be careful to structure your type assertions
 // accordingly.
-func (nfo *PEInfo) DataDirectoryEntry(idx int) (any, error) {
+func (nfo *PEHeaders) DataDirectoryEntry(idx DataDirectoryIndex) (any, error) {
 	dd := nfo.dataDirectory()
-	if idx >= len(dd) {
+	if int(idx) >= len(dd) {
 		return nil, ErrIndexOutOfRange
 	}
 
@@ -405,15 +438,15 @@ func (nfo *PEInfo) DataDirectoryEntry(idx int) (any, error) {
 
 	switch idx {
 	/* TODO(aaron): (don't forget to sync tests!)
-	case dpe.IMAGE_DIRECTORY_ENTRY_EXPORT:
-	case dpe.IMAGE_DIRECTORY_ENTRY_IMPORT:
-	case dpe.IMAGE_DIRECTORY_ENTRY_RESOURCE:
+	case IMAGE_DIRECTORY_ENTRY_EXPORT:
+	case IMAGE_DIRECTORY_ENTRY_IMPORT:
+	case IMAGE_DIRECTORY_ENTRY_RESOURCE:
 	*/
-	case dpe.IMAGE_DIRECTORY_ENTRY_SECURITY:
+	case IMAGE_DIRECTORY_ENTRY_SECURITY:
 		return nfo.extractAuthenticode(dde)
-	case dpe.IMAGE_DIRECTORY_ENTRY_DEBUG:
+	case IMAGE_DIRECTORY_ENTRY_DEBUG:
 		return nfo.extractDebugInfo(dde)
-	// case dpe.IMAGE_DIRECTORY_ENTRY_COM_DESCRIPTOR:
+	// case IMAGE_DIRECTORY_ENTRY_COM_DESCRIPTOR:
 	default:
 		return dde, nil
 	}
@@ -530,14 +563,14 @@ func (u *IMAGE_DEBUG_INFO_CODEVIEW_UNPACKED) unpack(r *bufio.Reader) error {
 	return nil
 }
 
-func (nfo *PEInfo) extractDebugInfo(dde dpe.DataDirectory) (any, error) {
+func (nfo *PEHeaders) extractDebugInfo(dde DataDirectoryEntry) (any, error) {
 	count := dde.Size / uint32(unsafe.Sizeof(IMAGE_DEBUG_DIRECTORY{}))
 	return readStructArray[IMAGE_DEBUG_DIRECTORY](nfo.r, resolveRVA(nfo, dde.VirtualAddress), int(count))
 }
 
 // ExtractCodeViewInfo obtains CodeView debug information from de, assuming that
 // de represents CodeView debug info.
-func (nfo *PEInfo) ExtractCodeViewInfo(de IMAGE_DEBUG_DIRECTORY) (*IMAGE_DEBUG_INFO_CODEVIEW_UNPACKED, error) {
+func (nfo *PEHeaders) ExtractCodeViewInfo(de IMAGE_DEBUG_DIRECTORY) (*IMAGE_DEBUG_INFO_CODEVIEW_UNPACKED, error) {
 	if de.Type != IMAGE_DEBUG_TYPE_CODEVIEW {
 		return nil, ErrNotCodeView
 	}
@@ -560,7 +593,7 @@ func (nfo *PEInfo) ExtractCodeViewInfo(de IMAGE_DEBUG_DIRECTORY) (*IMAGE_DEBUG_I
 	return cv, nil
 }
 
-func (nfo *PEInfo) extractAuthenticode(dde dpe.DataDirectory) (any, error) {
+func (nfo *PEHeaders) extractAuthenticode(dde DataDirectoryEntry) (any, error) {
 	if _, ok := nfo.r.(*peFile); !ok {
 		// Authenticode; only available in file, not loaded at runtime.
 		return nil, ErrUnavailableInModule
@@ -583,13 +616,9 @@ func (nfo *PEInfo) extractAuthenticode(dde dpe.DataDirectory) (any, error) {
 		curOffset += int64(szEntry)
 
 		entry.data = make([]byte, uintptr(entry.header.Length)-szEntry)
-		n, err := sr.Read(entry.data)
+		n, err := io.ReadFull(sr, entry.data)
 		if err != nil {
-			// No EOF check here since we've already read a header and are expecting data
 			return nil, err
-		}
-		if n != len(entry.data) {
-			return nil, fmt.Errorf("%w: want %d, got %d", ErrBadLength, len(entry.data), n)
 		}
 		curOffset += int64(n)
 
