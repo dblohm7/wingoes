@@ -31,6 +31,7 @@ func TestFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewPEFromFile: %v", err)
 	}
+	defer pei.Close()
 
 	t.Logf("Limit: 0x%08X (%d)\n", pei.r.Limit(), pei.r.Limit())
 
@@ -106,6 +107,7 @@ func TestFileVsModule(t *testing.T) {
 	if err != nil {
 		t.Errorf("NewPEFromFile: %v", err)
 	}
+	defer pef.Close()
 
 	fname16, err := windows.UTF16PtrFromString(fname)
 	if err != nil {
@@ -125,6 +127,7 @@ func TestFileVsModule(t *testing.T) {
 	if err != nil {
 		t.Errorf("NewPEFromHMODULE: %v", err)
 	}
+	defer pem.Close()
 
 	if !reflect.DeepEqual(pef.fileHeader, pem.fileHeader) {
 		t.Errorf("DeepEqual failed on fileHeader")

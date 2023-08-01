@@ -178,6 +178,10 @@ func NewPEFromFileHandle(hfile windows.Handle) (*PEHeaders, error) {
 	return newPEFromFile(os.NewFile(uintptr(hfileDup), "PEFromFileHandle"))
 }
 
+func (peh *PEHeaders) Close() error {
+	return peh.r.Close()
+}
+
 type peReader interface {
 	Base() uintptr
 	io.Closer
