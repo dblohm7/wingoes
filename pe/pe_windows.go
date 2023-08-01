@@ -645,7 +645,7 @@ func (nfo *PEHeaders) extractAuthenticode(dde DataDirectoryEntry) (any, error) {
 	// The VirtualAddress is a file offset.
 	sr := io.NewSectionReader(nfo.r, int64(dde.VirtualAddress), int64(dde.Size))
 	var curOffset int64
-	szEntry := unsafe.Sizeof(AuthenticodeCert{})
+	szEntry := unsafe.Sizeof(_WIN_CERTIFICATE_HEADER{})
 
 	for {
 		var entry AuthenticodeCert
