@@ -38,10 +38,12 @@ const (
 
 var (
 	ErrBadLength           = errors.New("effective length did not match expected length")
+	ErrBadCodeView         = errors.New("invalid CodeView debug info")
 	ErrNotCodeView         = errors.New("debug info is not CodeView")
 	ErrNotPresent          = errors.New("not present in this PE image")
 	ErrIndexOutOfRange     = errors.New("index out of range")
 	ErrInvalidBinary       = errors.New("invalid PE binary")
+	ErrResolvingFileRVA    = errors.New("could not resolve file RVA")
 	ErrUnavailableInModule = errors.New("this information is unavailable from loaded modules; the PE file itself must be examined")
 	ErrUnsupportedMachine  = errors.New("unsupported machine")
 )
@@ -184,6 +186,11 @@ type peReader interface {
 	Limit() uintptr
 }
 
+// addOffset ensures that, if off is negative, it does not underflow base
+// (Note that sometimes this might actually need to be relaxed when dealing
+// with modules; third-party crapware might have tampered with the binary and
+// written negative offsets pointing to memory that is in fact at a lower
+// virtual address than the binary itself).
 func addOffset[O constraints.Integer](base uintptr, off O) uintptr {
 	if off >= 0 {
 		return base + uintptr(off)
@@ -196,6 +203,8 @@ func addOffset[O constraints.Integer](base uintptr, off O) uintptr {
 	return base - negation
 }
 
+// readStruct reads a T from offset rva. If r is a *peModule, the returned *T
+// points to the data in-place.
 func readStruct[T any, O constraints.Integer](r peReader, rva O) (*T, error) {
 	switch v := r.(type) {
 	case *peFile:
@@ -222,6 +231,8 @@ func readStruct[T any, O constraints.Integer](r peReader, rva O) (*T, error) {
 	}
 }
 
+// readStructArray reads a []T with length count from offset rva. If r is a
+// *peModule, the returned []T references the data in-place.
 func readStructArray[T any, O constraints.Integer](r peReader, rva O, count int) ([]T, error) {
 	switch v := r.(type) {
 	case *peFile:
@@ -253,6 +264,8 @@ type peSectionHeader struct {
 }
 
 func (s *peSectionHeader) NameAsString() string {
+	// s.Name is UTF-8. When the string's length is < len(s.Name), the remaining
+	// bytes are padded with zeros.
 	for i, c := range s.Name {
 		if c == 0 {
 			return string(s.Name[:i])
@@ -263,7 +276,7 @@ func (s *peSectionHeader) NameAsString() string {
 }
 
 func loadHeaders(r peReader) (*PEHeaders, error) {
-	// Do some initial verification first
+	// Check the signature of the DOS stub header
 	var mz [2]byte
 	if _, err := r.ReadAt(mz[:], 0); err != nil {
 		return nil, err
@@ -272,10 +285,12 @@ func loadHeaders(r peReader) (*PEHeaders, error) {
 		return nil, ErrInvalidBinary
 	}
 
+	// Seek to the offset of the value that points to the beginning of the PE headers
 	if _, err := r.Seek(offsetIMAGE_DOS_HEADERe_lfanew, io.SeekStart); err != nil {
 		return nil, err
 	}
 
+	// Load the offset to the beginning of the PE headers
 	var e_lfanew int32
 	if err := binary.Read(r, binary.LittleEndian, &e_lfanew); err != nil {
 		return nil, err
@@ -287,6 +302,7 @@ func loadHeaders(r peReader) (*PEHeaders, error) {
 		return nil, ErrInvalidBinary
 	}
 
+	// Check the PE signature
 	var peSig [4]byte
 	if _, err := r.ReadAt(peSig[:], int64(e_lfanew)); err != nil {
 		return nil, err
@@ -295,6 +311,7 @@ func loadHeaders(r peReader) (*PEHeaders, error) {
 		return nil, ErrInvalidBinary
 	}
 
+	// Read the file header
 	fileHeaderOffset := uintptr(e_lfanew) + unsafe.Sizeof(peSig)
 	fileHeader, err := readStruct[dpe.FileHeader](r, fileHeaderOffset)
 	if err != nil {
@@ -311,6 +328,7 @@ func loadHeaders(r peReader) (*PEHeaders, error) {
 		return nil, ErrUnsupportedMachine
 	}
 
+	// Read the optional header
 	optionalHeaderOffset := fileHeaderOffset + unsafe.Sizeof(dpe.FileHeader{})
 	// TODO(aaron): parameterize optional header type so we can read binaries
 	// from disk whose archs do not necessarily match our own.
@@ -319,6 +337,7 @@ func loadHeaders(r peReader) (*PEHeaders, error) {
 		return nil, err
 	}
 
+	// Check the optional header's Magic field
 	expectedOptionalHeaderMagic := uint16(optionalHeaderMagic)
 	if !isModule {
 		switch fileHeader.Machine {
@@ -349,6 +368,7 @@ func loadHeaders(r peReader) (*PEHeaders, error) {
 		numSections = maxNumSections
 	}
 
+	// Read in the section table
 	sectionTableRVA := optionalHeaderOffset + uintptr(fileHeader.SizeOfOptionalHeader)
 	sections, err := readStructArray[peSectionHeader](r, sectionTableRVA, int(numSections))
 	if err != nil {
@@ -358,11 +378,17 @@ func loadHeaders(r peReader) (*PEHeaders, error) {
 	return &PEHeaders{r: r, fileHeader: fileHeader, optionalHeader: optionalHeader, sections: sections}, nil
 }
 
+// resolveRVA resolves rva, or returns 0 if unavailable.
 func resolveRVA[O constraints.Integer](nfo *PEHeaders, rva O) int64 {
 	if _, ok := nfo.r.(*peFile); !ok {
+		// Just the identity function in this case.
 		return int64(rva)
 	}
 
+	// We walk the section table, locating the section that would contain rva if
+	// we were mapped into memory. We then calculate the offset of rva from the
+	// starting virtual address of the section, and then add that offset to the
+	// file pointer.
 	urva := uint32(rva)
 	for _, s := range nfo.sections {
 		if urva < s.VirtualAddress {
@@ -522,7 +548,7 @@ const IMAGE_DEBUG_TYPE_CODEVIEW = 2
 
 // IMAGE_DEBUG_INFO_CODEVIEW_UNPACKED contains CodeView debug information
 // embedded in the PE file. Note that this structure's ABI does not match its C
-// counterpart because the latter is packed.
+// counterpart because the former uses a Go string and the latter is packed.
 type IMAGE_DEBUG_INFO_CODEVIEW_UNPACKED struct {
 	GUID    windows.GUID
 	Age     uint32
@@ -542,14 +568,21 @@ func (u *IMAGE_DEBUG_INFO_CODEVIEW_UNPACKED) String() string {
 	return b.String()
 }
 
+const codeViewSignature = 0x53445352
+
 func (u *IMAGE_DEBUG_INFO_CODEVIEW_UNPACKED) unpack(r *bufio.Reader) error {
 	var signature uint32
 	if err := binary.Read(r, binary.LittleEndian, &signature); err != nil {
 		return err
 	}
+	if signature != codeViewSignature {
+		return ErrBadCodeView
+	}
+
 	if err := binary.Read(r, binary.LittleEndian, &u.GUID); err != nil {
 		return err
 	}
+
 	if err := binary.Read(r, binary.LittleEndian, &u.Age); err != nil {
 		return err
 	}
@@ -564,8 +597,13 @@ func (u *IMAGE_DEBUG_INFO_CODEVIEW_UNPACKED) unpack(r *bufio.Reader) error {
 }
 
 func (nfo *PEHeaders) extractDebugInfo(dde DataDirectoryEntry) (any, error) {
+	rva := resolveRVA(nfo, dde.VirtualAddress)
+	if rva == 0 {
+		return nil, ErrResolvingFileRVA
+	}
+
 	count := dde.Size / uint32(unsafe.Sizeof(IMAGE_DEBUG_DIRECTORY{}))
-	return readStructArray[IMAGE_DEBUG_DIRECTORY](nfo.r, resolveRVA(nfo, dde.VirtualAddress), int(count))
+	return readStructArray[IMAGE_DEBUG_DIRECTORY](nfo.r, rva, int(count))
 }
 
 // ExtractCodeViewInfo obtains CodeView debug information from de, assuming that

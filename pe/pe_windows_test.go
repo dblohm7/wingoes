@@ -13,6 +13,7 @@ import (
 )
 
 func getTestBinaryFileName() string {
+	// TODO(aaron): Test against both!
 	// NOTE: return value should match a module already loaded in our process
 	if runtime.GOOS == "windows" {
 		// kernel32 is always implicitly loaded
@@ -69,7 +70,7 @@ func TestFile(t *testing.T) {
 				t.Errorf("ExtractCodeViewInfo: %v", err)
 				continue
 			}
-			t.Logf("CodeView: %s", cv.String())
+			t.Logf("CodeView %q: %q", cv.String(), cv.PDBPath)
 			break
 		}
 	}
@@ -89,6 +90,9 @@ func TestFile(t *testing.T) {
 	for i, cert := range certs {
 		t.Logf("%02d: Rev 0x%04X, Type %d, %d bytes", i, cert.Revision(), cert.Type(), len(cert.Data()))
 	}
+
+	// TODO(aaron): Compare authenticode info against ImageGetCertificateData
+	// TODO(aaron): Compare debug info against SymSrvGetFileIndexInfoW
 }
 
 func TestFileVsModule(t *testing.T) {
