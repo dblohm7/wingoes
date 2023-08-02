@@ -1,6 +1,8 @@
 // Copyright (c) Tailscale Inc & AUTHORS
 // SPDX-License-Identifier: BSD-3-Clause
 
+//go:build windows
+
 package pe
 
 import (
@@ -210,5 +212,28 @@ func TestFileVsModule(t *testing.T) {
 				}
 			}
 		}
+	}
+}
+
+func TestVersionInfo(t *testing.T) {
+	fname := getTestBinaryFileName()
+
+	vi, err := NewVersionInfo(fname)
+	if err != nil {
+		if err == ErrNotPresent {
+			t.Skipf("No version info present in %q", fname)
+		} else {
+			t.Fatalf("NewVersionInfo failed: %v", err)
+		}
+	}
+
+	verNum := vi.VersionNumber()
+	t.Logf("Version number: %q", verNum.String())
+
+	companyName, err := vi.CompanyName()
+	if err != nil {
+		t.Errorf("CompanyName failed: %v", err)
+	} else {
+		t.Logf("CompanyName: %q", companyName)
 	}
 }
