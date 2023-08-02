@@ -50,12 +50,12 @@ func TestFile(t *testing.T) {
 	}
 
 	dbgDirAny, err := pei.DataDirectoryEntry(dpe.IMAGE_DIRECTORY_ENTRY_DEBUG)
-	if err != nil {
+	if err != nil && err != ErrNotPresent {
 		t.Fatalf("(*PEInfo).DataDirectoryEntry(%d) error %v", dpe.IMAGE_DIRECTORY_ENTRY_DEBUG, err)
 	}
 
 	dbgDir, ok := dbgDirAny.([]IMAGE_DEBUG_DIRECTORY)
-	if !ok {
+	if dbgDirAny != nil && !ok {
 		t.Errorf("did not get []IMAGE_DEBUG_DIRECTORY")
 	}
 
@@ -81,12 +81,12 @@ func TestFile(t *testing.T) {
 
 	t.Logf("\n")
 	certsAny, err := pei.DataDirectoryEntry(dpe.IMAGE_DIRECTORY_ENTRY_SECURITY)
-	if err != nil {
-		t.Fatalf("(*PEInfo).DataDirectoryEntry(%d) error %v", dpe.IMAGE_DIRECTORY_ENTRY_DEBUG, err)
+	if err != nil && err != ErrNotPresent {
+		t.Fatalf("(*PEInfo).DataDirectoryEntry(%d) error %v", dpe.IMAGE_DIRECTORY_ENTRY_SECURITY, err)
 	}
 
 	certs, ok := certsAny.([]AuthenticodeCert)
-	if !ok {
+	if certsAny != nil && !ok {
 		t.Errorf("did not get []AuthenticodeCert")
 	}
 
@@ -171,40 +171,42 @@ func TestFileVsModule(t *testing.T) {
 		t.Errorf("DataDirectoryEntry[%d] for file returned %v while module returned %v", ddIdx, dbgInfoFileAny, dbgInfoModuleAny)
 	}
 
-	dbgInfoFile, ok := dbgInfoFileAny.([]IMAGE_DEBUG_DIRECTORY)
-	if !ok {
-		t.Errorf("type assertion failed for dbgInfoFileAny")
-	}
+	if dbgInfoFileAny != nil && dbgInfoModuleAny != nil {
+		dbgInfoFile, ok := dbgInfoFileAny.([]IMAGE_DEBUG_DIRECTORY)
+		if !ok {
+			t.Errorf("type assertion failed for dbgInfoFileAny")
+		}
 
-	dbgInfoModule, ok := dbgInfoModuleAny.([]IMAGE_DEBUG_DIRECTORY)
-	if !ok {
-		t.Errorf("type assertion failed for dbgInfoFileModule")
-	}
+		dbgInfoModule, ok := dbgInfoModuleAny.([]IMAGE_DEBUG_DIRECTORY)
+		if !ok {
+			t.Errorf("type assertion failed for dbgInfoFileModule")
+		}
 
-	if len(dbgInfoFile) != len(dbgInfoModule) {
-		t.Errorf("length mismatch between dbgInfoFile (%d) and dbgInfoModule (%d)", len(dbgInfoFile), len(dbgInfoModule))
-	} else {
-		for i, def := range dbgInfoFile {
-			dem := dbgInfoModule[i]
-			if def.Type != dem.Type {
-				t.Errorf("type mismatch between dbgInfoFile[%d] (%d) and dbgInfoModule[%d] (%d)", i, def.Type, i, dem.Type)
-				continue
-			}
-			if def.Type == IMAGE_DEBUG_TYPE_CODEVIEW {
-				cvf, err := pef.ExtractCodeViewInfo(def)
-				if err != nil {
-					t.Errorf("failed extracting CodeView info from dbgInfoFile[%d]: %v", i, err)
+		if len(dbgInfoFile) != len(dbgInfoModule) {
+			t.Errorf("length mismatch between dbgInfoFile (%d) and dbgInfoModule (%d)", len(dbgInfoFile), len(dbgInfoModule))
+		} else {
+			for i, def := range dbgInfoFile {
+				dem := dbgInfoModule[i]
+				if def.Type != dem.Type {
+					t.Errorf("type mismatch between dbgInfoFile[%d] (%d) and dbgInfoModule[%d] (%d)", i, def.Type, i, dem.Type)
 					continue
 				}
+				if def.Type == IMAGE_DEBUG_TYPE_CODEVIEW {
+					cvf, err := pef.ExtractCodeViewInfo(def)
+					if err != nil {
+						t.Errorf("failed extracting CodeView info from dbgInfoFile[%d]: %v", i, err)
+						continue
+					}
 
-				cvm, err := pem.ExtractCodeViewInfo(dem)
-				if err != nil {
-					t.Errorf("failed extracting CodeView info from dbgInfoModule[%d]: %v", i, err)
-					continue
-				}
+					cvm, err := pem.ExtractCodeViewInfo(dem)
+					if err != nil {
+						t.Errorf("failed extracting CodeView info from dbgInfoModule[%d]: %v", i, err)
+						continue
+					}
 
-				if !reflect.DeepEqual(*cvf, *cvm) {
-					t.Errorf("debug info mismatch")
+					if !reflect.DeepEqual(*cvf, *cvm) {
+						t.Errorf("debug info mismatch")
+					}
 				}
 			}
 		}

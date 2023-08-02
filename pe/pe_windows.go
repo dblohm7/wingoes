@@ -37,11 +37,14 @@ const (
 )
 
 var (
-	ErrBadLength           = errors.New("effective length did not match expected length")
-	ErrBadCodeView         = errors.New("invalid CodeView debug info")
-	ErrNotCodeView         = errors.New("debug info is not CodeView")
-	ErrNotPresent          = errors.New("not present in this PE image")
-	ErrIndexOutOfRange     = errors.New("index out of range")
+	ErrBadLength       = errors.New("effective length did not match expected length")
+	ErrBadCodeView     = errors.New("invalid CodeView debug info")
+	ErrNotCodeView     = errors.New("debug info is not CodeView")
+	ErrNotPresent      = errors.New("not present in this PE image")
+	ErrIndexOutOfRange = errors.New("index out of range")
+	// ErrInvalidBinary is returned whenever the headers do not parse as expected,
+	// or reference locations outside the bounds of the PE file or module.
+	// The headers might be corrupt or have been tampered with.
 	ErrInvalidBinary       = errors.New("invalid PE binary")
 	ErrResolvingFileRVA    = errors.New("could not resolve file RVA")
 	ErrUnavailableInModule = errors.New("this information is unavailable from loaded modules; the PE file itself must be examined")
@@ -132,7 +135,35 @@ func NewPEFromBaseAddress(baseAddr uintptr) (*PEHeaders, error) {
 // If the module is unloaded while the returned *PEHeaders is still in use,
 // its behaviour will become undefined.
 func NewPEFromHMODULE(hmodule windows.Handle) (*PEHeaders, error) {
+	// HMODULEs are just a loaded module's base address with the lowest two
+	// bits used for flags (see docs for LoadLibraryExW).
 	return NewPEFromBaseAddress(uintptr(hmodule) & ^uintptr(3))
+}
+
+// NewPEFromDLL parses the headers in a PE binary identified by dll that
+// is currently loaded into the current process's address space.
+// Upon success it returns a non-nil *PEHeaders, otherwise it returns a nil
+// *PEHeaders and a non-nil error.
+// If the DLL is Release()d while the returned *PEHeaders is still in use,
+// its behaviour will become undefined.
+func NewPEFromDLL(dll *windows.DLL) (*PEHeaders, error) {
+	if dll == nil || dll.Handle == 0 {
+		return nil, os.ErrInvalid
+	}
+
+	return NewPEFromHMODULE(dll.Handle)
+}
+
+// NewPEFromLazyDLL parses the headers in a PE binary identified by ldll that
+// is currently loaded into the current process's address space.
+// Upon success it returns a non-nil *PEHeaders, otherwise it returns a nil
+// *PEHeaders and a non-nil error.
+func NewPEFromLazyDLL(ldll *windows.LazyDLL) (*PEHeaders, error) {
+	if ldll == nil {
+		return nil, os.ErrInvalid
+	}
+
+	return NewPEFromHMODULE(windows.Handle(ldll.Handle()))
 }
 
 // NewPEFromFileName opens a PE binary located at filename and parses its PE
@@ -146,12 +177,6 @@ func NewPEFromFileName(filename string) (*PEHeaders, error) {
 	}
 
 	return newPEFromFile(f)
-}
-
-func newPEFromFile(f *os.File) (*PEHeaders, error) {
-	// peBounds base is 0, limit is loaded lazily
-	pef := &peFile{File: f}
-	return loadHeaders(pef)
 }
 
 // NewPEFromFileHandle parses the PE headers from hfile, an open Win32 file handle.
@@ -178,6 +203,12 @@ func NewPEFromFileHandle(hfile windows.Handle) (*PEHeaders, error) {
 	return newPEFromFile(os.NewFile(uintptr(hfileDup), "PEFromFileHandle"))
 }
 
+func newPEFromFile(f *os.File) (*PEHeaders, error) {
+	// peBounds base is 0, limit is loaded lazily
+	pef := &peFile{File: f}
+	return loadHeaders(pef)
+}
+
 func (peh *PEHeaders) Close() error {
 	return peh.r.Close()
 }
@@ -190,11 +221,11 @@ type peReader interface {
 	Limit() uintptr
 }
 
-// addOffset ensures that, if off is negative, it does not underflow base
-// (Note that sometimes this might actually need to be relaxed when dealing
-// with modules; third-party crapware might have tampered with the binary and
-// written negative offsets pointing to memory that is in fact at a lower
-// virtual address than the binary itself).
+// addOffset ensures that, if off is negative, it does not underflow base.
+// Note that sometimes the underflow restriction might actually need to be
+// relaxed when dealing with modules; third-party crapware might have tampered
+// with the binary and written negative offsets that point to memory that is in
+// fact at a lower virtual address than the binary itself.
 func addOffset[O constraints.Integer](base uintptr, off O) uintptr {
 	if off >= 0 {
 		return base + uintptr(off)
@@ -207,8 +238,20 @@ func addOffset[O constraints.Integer](base uintptr, off O) uintptr {
 	return base - negation
 }
 
+func binaryRead(r io.Reader, data any) (err error) {
+	// Windows is always LittleEndian
+	err = binary.Read(r, binary.LittleEndian, data)
+	if err == io.ErrUnexpectedEOF {
+		err = ErrBadLength
+	}
+	return err
+}
+
 // readStruct reads a T from offset rva. If r is a *peModule, the returned *T
 // points to the data in-place.
+// Note that currently this function will fail if rva references memory beyond
+// the bounds of the binary; in the case of modules, this may need to be relaxed
+// in some cases due to tampering by third-party crapware.
 func readStruct[T any, O constraints.Integer](r peReader, rva O) (*T, error) {
 	switch v := r.(type) {
 	case *peFile:
@@ -217,7 +260,7 @@ func readStruct[T any, O constraints.Integer](r peReader, rva O) (*T, error) {
 		}
 
 		result := new(T)
-		if err := binary.Read(r, binary.LittleEndian, result); err != nil {
+		if err := binaryRead(r, result); err != nil {
 			return nil, err
 		}
 
@@ -237,6 +280,9 @@ func readStruct[T any, O constraints.Integer](r peReader, rva O) (*T, error) {
 
 // readStructArray reads a []T with length count from offset rva. If r is a
 // *peModule, the returned []T references the data in-place.
+// Note that currently this function will fail if rva references memory beyond
+// the bounds of the binary; in the case of modules, this may need to be relaxed
+// in some cases due to tampering by third-party crapware.
 func readStructArray[T any, O constraints.Integer](r peReader, rva O, count int) ([]T, error) {
 	switch v := r.(type) {
 	case *peFile:
@@ -245,7 +291,7 @@ func readStructArray[T any, O constraints.Integer](r peReader, rva O, count int)
 		}
 
 		result := make([]T, count)
-		if err := binary.Read(r, binary.LittleEndian, result); err != nil {
+		if err := binaryRead(r, result); err != nil {
 			return nil, err
 		}
 
@@ -283,6 +329,9 @@ func loadHeaders(r peReader) (*PEHeaders, error) {
 	// Check the signature of the DOS stub header
 	var mz [2]byte
 	if _, err := r.ReadAt(mz[:], 0); err != nil {
+		if err == io.EOF {
+			err = ErrInvalidBinary
+		}
 		return nil, err
 	}
 	if mz[0] != 'M' || mz[1] != 'Z' {
@@ -296,7 +345,10 @@ func loadHeaders(r peReader) (*PEHeaders, error) {
 
 	// Load the offset to the beginning of the PE headers
 	var e_lfanew int32
-	if err := binary.Read(r, binary.LittleEndian, &e_lfanew); err != nil {
+	if err := binaryRead(r, &e_lfanew); err != nil {
+		if err == ErrBadLength {
+			err = ErrInvalidBinary
+		}
 		return nil, err
 	}
 	if e_lfanew <= 0 {
@@ -309,6 +361,9 @@ func loadHeaders(r peReader) (*PEHeaders, error) {
 	// Check the PE signature
 	var peSig [4]byte
 	if _, err := r.ReadAt(peSig[:], int64(e_lfanew)); err != nil {
+		if err == io.EOF {
+			err = ErrInvalidBinary
+		}
 		return nil, err
 	}
 	if peSig[0] != 'P' || peSig[1] != 'E' || peSig[2] != 0 || peSig[3] != 0 {
@@ -317,13 +372,17 @@ func loadHeaders(r peReader) (*PEHeaders, error) {
 
 	// Read the file header
 	fileHeaderOffset := uintptr(e_lfanew) + unsafe.Sizeof(peSig)
+	if fileHeaderOffset >= r.Limit() {
+		return nil, ErrInvalidBinary
+	}
+
 	fileHeader, err := readStruct[dpe.FileHeader](r, fileHeaderOffset)
 	if err != nil {
 		return nil, err
 	}
 
 	// In-memory modules should always have a machine type that matches our own.
-	// (okay, so that's kinda, sorta, untrue with respect to WOW64, but that's
+	// (okay, so that's kinda sorta untrue with respect to WOW64, but that's
 	// a _very_ obscure use case).
 	_, isModule := r.(*peModule)
 	// TODO(aaron): Uncomment once we can read binaries from disk whose archs
@@ -334,6 +393,10 @@ func loadHeaders(r peReader) (*PEHeaders, error) {
 
 	// Read the optional header
 	optionalHeaderOffset := fileHeaderOffset + unsafe.Sizeof(dpe.FileHeader{})
+	if optionalHeaderOffset >= r.Limit() {
+		return nil, ErrInvalidBinary
+	}
+
 	// TODO(aaron): parameterize optional header type so we can read binaries
 	// from disk whose archs do not necessarily match our own.
 	optionalHeader, err := readStruct[optionalHeader](r, optionalHeaderOffset)
@@ -360,7 +423,7 @@ func loadHeaders(r peReader) (*PEHeaders, error) {
 
 	// Coarse-grained check that header sizes make sense
 	totalEssentialHeaderLen := uint32(offsetIMAGE_DOS_HEADERe_lfanew) +
-		uint32(unsafe.Sizeof(int32(0))) + // e_lfanew itself
+		uint32(unsafe.Sizeof(e_lfanew)) +
 		uint32(unsafe.Sizeof(*fileHeader)) +
 		uint32(fileHeader.SizeOfOptionalHeader)
 	if optionalHeader.SizeOfImage < totalEssentialHeaderLen {
@@ -373,8 +436,12 @@ func loadHeaders(r peReader) (*PEHeaders, error) {
 	}
 
 	// Read in the section table
-	sectionTableRVA := optionalHeaderOffset + uintptr(fileHeader.SizeOfOptionalHeader)
-	sections, err := readStructArray[peSectionHeader](r, sectionTableRVA, int(numSections))
+	sectionTableOffset := optionalHeaderOffset + uintptr(fileHeader.SizeOfOptionalHeader)
+	if sectionTableOffset >= r.Limit() {
+		return nil, ErrInvalidBinary
+	}
+
+	sections, err := readStructArray[peSectionHeader](r, sectionTableOffset, int(numSections))
 	if err != nil {
 		return nil, err
 	}
@@ -552,7 +619,8 @@ const IMAGE_DEBUG_TYPE_CODEVIEW = 2
 
 // IMAGE_DEBUG_INFO_CODEVIEW_UNPACKED contains CodeView debug information
 // embedded in the PE file. Note that this structure's ABI does not match its C
-// counterpart because the former uses a Go string and the latter is packed.
+// counterpart because the former uses a Go string and the latter is packed and
+// includes a signature field.
 type IMAGE_DEBUG_INFO_CODEVIEW_UNPACKED struct {
 	GUID    windows.GUID
 	Age     uint32
@@ -576,22 +644,24 @@ const codeViewSignature = 0x53445352
 
 func (u *IMAGE_DEBUG_INFO_CODEVIEW_UNPACKED) unpack(r *bufio.Reader) error {
 	var signature uint32
-	if err := binary.Read(r, binary.LittleEndian, &signature); err != nil {
+	if err := binaryRead(r, &signature); err != nil {
 		return err
 	}
 	if signature != codeViewSignature {
 		return ErrBadCodeView
 	}
 
-	if err := binary.Read(r, binary.LittleEndian, &u.GUID); err != nil {
+	if err := binaryRead(r, &u.GUID); err != nil {
 		return err
 	}
 
-	if err := binary.Read(r, binary.LittleEndian, &u.Age); err != nil {
+	if err := binaryRead(r, &u.Age); err != nil {
 		return err
 	}
 
-	var pdbBytes []byte
+	// Minimum capacity is enough for a 8.3 ASCII filename, which is common for
+	// this field.
+	pdbBytes := make([]byte, 0, 12)
 	for b, err := r.ReadByte(); err == nil && b != 0; b, err = r.ReadByte() {
 		pdbBytes = append(pdbBytes, b)
 	}
@@ -635,6 +705,14 @@ func (nfo *PEHeaders) ExtractCodeViewInfo(de IMAGE_DEBUG_DIRECTORY) (*IMAGE_DEBU
 	return cv, nil
 }
 
+func readFull(r io.Reader, buf []byte) (n int, err error) {
+	n, err = io.ReadFull(r, buf)
+	if err == io.ErrUnexpectedEOF {
+		err = ErrBadLength
+	}
+	return n, err
+}
+
 func (nfo *PEHeaders) extractAuthenticode(dde DataDirectoryEntry) (any, error) {
 	if _, ok := nfo.r.(*peFile); !ok {
 		// Authenticode; only available in file, not loaded at runtime.
@@ -649,7 +727,7 @@ func (nfo *PEHeaders) extractAuthenticode(dde DataDirectoryEntry) (any, error) {
 
 	for {
 		var entry AuthenticodeCert
-		if err := binary.Read(sr, binary.LittleEndian, &entry.header); err != nil {
+		if err := binaryRead(sr, &entry.header); err != nil {
 			if err == io.EOF {
 				break
 			}
@@ -657,8 +735,12 @@ func (nfo *PEHeaders) extractAuthenticode(dde DataDirectoryEntry) (any, error) {
 		}
 		curOffset += int64(szEntry)
 
+		if uintptr(entry.header.Length) < szEntry {
+			return nil, ErrInvalidBinary
+		}
+
 		entry.data = make([]byte, uintptr(entry.header.Length)-szEntry)
-		n, err := io.ReadFull(sr, entry.data)
+		n, err := readFull(sr, entry.data)
 		if err != nil {
 			return nil, err
 		}
