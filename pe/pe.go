@@ -106,7 +106,7 @@ func (pei *peModule) Limit() uintptr {
 func NewPEFromBaseAddressAndSize(baseAddr uintptr, size uint32) (*PEHeaders, error) {
 	slc := unsafe.Slice((*byte)(unsafe.Pointer(baseAddr)), size)
 	r := bytes.NewReader(slc)
-	peMod := &peModule{Reader: r, peBounds: peBounds{base: baseAddr, limit: baseAddr + size}}
+	peMod := &peModule{Reader: r, peBounds: peBounds{base: baseAddr, limit: baseAddr + uintptr(size)}}
 	return loadHeaders(peMod)
 }
 
