@@ -103,7 +103,7 @@ func (pei *peModule) Limit() uintptr {
 // *PEHeaders and a non-nil error.
 // If the module is unloaded while the returned *PEHeaders is still in use,
 // its behaviour will become undefined.
-func NewPEFromBaseAddressAndSize(baseAddr, size uintptr) (*PEHeaders, error) {
+func NewPEFromBaseAddressAndSize(baseAddr uintptr, size uint32) (*PEHeaders, error) {
 	slc := unsafe.Slice((*byte)(unsafe.Pointer(baseAddr)), size)
 	r := bytes.NewReader(slc)
 	peMod := &peModule{Reader: r, peBounds: peBounds{base: baseAddr, limit: baseAddr + size}}
@@ -127,7 +127,7 @@ func NewPEFromBaseAddress(baseAddr uintptr) (*PEHeaders, error) {
 		return nil, fmt.Errorf("querying module handle: %w", err)
 	}
 
-	return NewPEFromBaseAddressAndSize(baseAddr, uintptr(modInfo.SizeOfImage))
+	return NewPEFromBaseAddressAndSize(baseAddr, modInfo.SizeOfImage)
 }
 
 // NewPEFromHMODULE parses the headers in a PE binary identified by hmodule that
