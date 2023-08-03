@@ -3,7 +3,7 @@
 
 //go:build windows
 
-// Package pe provides a robust parser for PE binaries.
+// Package pe provides facilities for extracting information from PE binaries.
 package pe
 
 import (
@@ -46,7 +46,7 @@ var (
 	ErrIndexOutOfRange = errors.New("index out of range")
 	// ErrInvalidBinary is returned whenever the headers do not parse as expected,
 	// or reference locations outside the bounds of the PE file or module.
-	// The headers might be corrupt or have been tampered with.
+	// The headers might be corrupt, malicious, or have been tampered with.
 	ErrInvalidBinary       = errors.New("invalid PE binary")
 	ErrResolvingFileRVA    = errors.New("could not resolve file RVA")
 	ErrUnavailableInModule = errors.New("this information is unavailable from loaded modules; the PE file itself must be examined")
@@ -434,7 +434,8 @@ func loadHeaders(r peReader) (*PEHeaders, error) {
 
 	numSections := fileHeader.NumberOfSections
 	if numSections > maxNumSections {
-		numSections = maxNumSections
+		// More than 96 sections?! Really?!
+		return nil, ErrInvalidBinary
 	}
 
 	// Read in the section table
@@ -461,7 +462,7 @@ func resolveRVA[O constraints.Integer](nfo *PEHeaders, rva O) int64 {
 	// We walk the section table, locating the section that would contain rva if
 	// we were mapped into memory. We then calculate the offset of rva from the
 	// starting virtual address of the section, and then add that offset to the
-	// file pointer.
+	// section's starting file pointer.
 	urva := uint32(rva)
 	for _, s := range nfo.sections {
 		if urva < s.VirtualAddress {
@@ -622,7 +623,7 @@ const IMAGE_DEBUG_TYPE_CODEVIEW = 2
 // IMAGE_DEBUG_INFO_CODEVIEW_UNPACKED contains CodeView debug information
 // embedded in the PE file. Note that this structure's ABI does not match its C
 // counterpart because the former uses a Go string and the latter is packed and
-// includes a signature field.
+// also includes a signature field.
 type IMAGE_DEBUG_INFO_CODEVIEW_UNPACKED struct {
 	GUID    windows.GUID
 	Age     uint32

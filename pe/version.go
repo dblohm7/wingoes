@@ -18,6 +18,8 @@ var (
 	errFixedFileInfoBadSig   = errors.New("bad VS_FIXEDFILEINFO signature")
 )
 
+// VersionNumber encapsulates a four-component version number that is stored
+// in Windows VERSIONINFO resources.
 type VersionNumber struct {
 	Major uint16
 	Minor uint16
@@ -34,17 +36,24 @@ type langAndCodePage struct {
 	codePage uint16
 }
 
+// VersionInfo encapsulates a buffer containing the VERSIONINFO resources that
+// have been successfully extracted from a PE binary.
 type VersionInfo struct {
 	buf            []byte
-	translationIDs []langAndCodePage
 	fixed          *windows.VS_FIXEDFILEINFO
+	translationIDs []langAndCodePage
 }
 
 const (
-	enUS        = 0x0409
-	langNeutral = 0
+	langEnUS        = 0x0409
+	codePageUTF16LE = 0x04B0
+	langNeutral     = 0
+	codePageNeutral = 0
 )
 
+// NewVersionInfo extracts any VERSIONINFO resource from filepath, parses its
+// fixed-size information, and returns a *VersionInfo for further querying.
+// It returns ErrNotPresent if no VERSIONINFO resources are found.
 func NewVersionInfo(filepath string) (*VersionInfo, error) {
 	bufSize, err := windows.GetFileVersionInfoSize(filepath, nil)
 	if err != nil {
@@ -71,27 +80,9 @@ func NewVersionInfo(filepath string) (*VersionInfo, error) {
 		return nil, errFixedFileInfoBadSig
 	}
 
-	// Preferred translations, in order of preference. No preference for code page.
-	translationIDs := []langAndCodePage{
-		langAndCodePage{
-			language: enUS,
-		},
-		langAndCodePage{
-			language: langNeutral,
-		},
-	}
-
-	var ids *langAndCodePage
-	var idsNumBytes uint32
-	if err := windows.VerQueryValue(unsafe.Pointer(&buf[0]), `\VarFileInfo\Translation`, unsafe.Pointer(&ids), &idsNumBytes); err == nil {
-		idsSlice := unsafe.Slice(ids, idsNumBytes/uint32(unsafe.Sizeof(*ids)))
-		translationIDs = append(translationIDs, idsSlice...)
-	}
-
 	return &VersionInfo{
-		buf:            buf,
-		translationIDs: translationIDs,
-		fixed:          fixed,
+		buf:   buf,
+		fixed: fixed,
 	}, nil
 }
 
@@ -106,6 +97,41 @@ func (vi *VersionInfo) VersionNumber() VersionNumber {
 	}
 }
 
+func (vi *VersionInfo) maybeLoadTranslationIDs() {
+	if vi.translationIDs != nil {
+		// Already loaded
+		return
+	}
+
+	// Preferred translations, in order of preference.
+	preferredTranslationIDs := []langAndCodePage{
+		langAndCodePage{
+			language: langEnUS,
+			codePage: codePageUTF16LE,
+		},
+		langAndCodePage{
+			language: langNeutral,
+			codePage: codePageNeutral,
+		},
+	}
+
+	var ids *langAndCodePage
+	var idsNumBytes uint32
+	if err := windows.VerQueryValue(
+		unsafe.Pointer(&vi.buf[0]),
+		`\VarFileInfo\Translation`,
+		unsafe.Pointer(&ids),
+		&idsNumBytes,
+	); err != nil {
+		// If nothing is listed, then just try to use our preferred translation IDs.
+		vi.translationIDs = preferredTranslationIDs
+		return
+	}
+
+	idsSlice := unsafe.Slice(ids, idsNumBytes/uint32(unsafe.Sizeof(*ids)))
+	vi.translationIDs = append(preferredTranslationIDs, idsSlice...)
+}
+
 func (vi *VersionInfo) queryWithLangAndCodePage(key string, lcp langAndCodePage) (string, error) {
 	fq := fmt.Sprintf("\\StringFileInfo\\%04x%04x\\%s", lcp.language, lcp.codePage, key)
 
@@ -118,7 +144,15 @@ func (vi *VersionInfo) queryWithLangAndCodePage(key string, lcp langAndCodePage)
 	return windows.UTF16ToString(unsafe.Slice(value, valueLen)), nil
 }
 
-func (vi *VersionInfo) field(key string) (string, error) {
+// Field queries the version information for a field named key and either
+// returns the field's value, or an error. It attempts to resolve strings using
+// the following order of language preference: en-US, language-neutral, followed
+// by the first entry in version info's list of supported languages that
+// successfully resolves the key.
+// If the key cannot be resolved, it returns ErrNotPresent.
+func (vi *VersionInfo) Field(key string) (string, error) {
+	vi.maybeLoadTranslationIDs()
+
 	for _, lcp := range vi.translationIDs {
 		value, err := vi.queryWithLangAndCodePage(key, lcp)
 		if err == nil {
@@ -131,8 +165,4 @@ func (vi *VersionInfo) field(key string) (string, error) {
 	}
 
 	return "", ErrNotPresent
-}
-
-func (vi *VersionInfo) CompanyName() (string, error) {
-	return vi.field("CompanyName")
 }

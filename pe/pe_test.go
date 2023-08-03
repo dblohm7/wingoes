@@ -230,7 +230,7 @@ func TestVersionInfo(t *testing.T) {
 	verNum := vi.VersionNumber()
 	t.Logf("Version number: %q", verNum.String())
 
-	companyName, err := vi.CompanyName()
+	companyName, err := vi.Field("CompanyName")
 	if err != nil {
 		t.Errorf("CompanyName failed: %v", err)
 	} else {
