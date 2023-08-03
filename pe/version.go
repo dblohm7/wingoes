@@ -27,7 +27,7 @@ type VersionNumber struct {
 	Build uint16
 }
 
-func (vn *VersionNumber) String() string {
+func (vn VersionNumber) String() string {
 	return fmt.Sprintf("%d.%d.%d.%d", vn.Major, vn.Minor, vn.Patch, vn.Build)
 }
 
