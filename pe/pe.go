@@ -597,11 +597,11 @@ func (ac *AuthenticodeCert) Data() []byte {
 	return ac.data
 }
 
-func alignUp[V constraints.Integer](v V, powerOfTwo V) V {
-	if v < 0 || powerOfTwo < 0 || bits.OnesCount(uint(powerOfTwo)) != 1 {
-		panic("invalid arguments to alignUp")
+func alignUp[V constraints.Integer](v V, powerOfTwo uint8) V {
+	if bits.OnesCount8(powerOfTwo) != 1 {
+		panic("invalid powerOfTwo argument to alignUp")
 	}
-	return v + ((-v) & (powerOfTwo - 1))
+	return v + ((-v) & (V(powerOfTwo) - 1))
 }
 
 // IMAGE_DEBUG_DIRECTORY describes debug information embedded in the binary.
