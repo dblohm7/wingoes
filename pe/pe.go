@@ -666,9 +666,7 @@ func (u *IMAGE_DEBUG_INFO_CODEVIEW_UNPACKED) unpack(r *bufio.Reader) error {
 		return err
 	}
 
-	// Minimum capacity is enough for a 8.3 ASCII filename, which is common for
-	// this field.
-	pdbBytes := make([]byte, 0, 12)
+	pdbBytes := make([]byte, 0, 16)
 	for b, err := r.ReadByte(); err == nil && b != 0; b, err = r.ReadByte() {
 		pdbBytes = append(pdbBytes, b)
 	}
