@@ -187,6 +187,10 @@ func NewPEFromFileName(filename string) (*PEHeaders, error) {
 // nil *PEHeaders and a non-nil error.
 // Call Close() on the returned *PEHeaders when it is no longer needed.
 func NewPEFromFileHandle(hfile windows.Handle) (*PEHeaders, error) {
+	if hfile == 0 || hfile == windows.InvalidHandle {
+		return nil, os.ErrInvalid
+	}
+
 	// Duplicate hfile so that we don't consume it.
 	var hfileDup windows.Handle
 	cp := windows.CurrentProcess()
