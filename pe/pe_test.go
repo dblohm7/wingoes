@@ -151,7 +151,7 @@ func TestFileVsModule(t *testing.T) {
 		t.Errorf("bytes.Equal failed on optionalHeader:\n\n%#v\n\nvs\n\n%#v\n\n", pefOHBytes, pemOHBytes)
 	}
 
-	// TODO(aaron): flesh out this test as (*PEInfo)DataDirectoryEntry is fleshed out
+	// TODO(aaron): flesh out this test as (*PEInfo).DataDirectoryEntry is fleshed out
 	// Compare some DataDirectory stuff between file and module. Note that
 	// IMAGE_DIRECTORY_ENTRY_SECURITY is unavailable in modules.
 	ddIdx := IMAGE_DIRECTORY_ENTRY_DEBUG

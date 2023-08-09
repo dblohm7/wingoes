@@ -463,6 +463,10 @@ func resolveRVA[O constraints.Integer](nfo *PEHeaders, rva O) int64 {
 		return int64(rva)
 	}
 
+	if rva < 0 {
+		return 0
+	}
+
 	// We walk the section table, locating the section that would contain rva if
 	// we were mapped into memory. We then calculate the offset of rva from the
 	// starting virtual address of the section, and then add that offset to the
