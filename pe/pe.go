@@ -24,14 +24,6 @@ import (
 	"golang.org/x/sys/windows"
 )
 
-// PEHeaders represents the partially-parsed headers from a PE binary.
-type PEHeaders struct {
-	r              peReader
-	fileHeader     *dpe.FileHeader
-	optionalHeader *optionalHeader
-	sections       []peSectionHeader
-}
-
 // The following constants are from the PE spec
 const (
 	offsetIMAGE_DOS_HEADERe_lfanew = 0x3C
@@ -52,6 +44,22 @@ var (
 	ErrUnavailableInModule = errors.New("this information is unavailable from loaded modules; the PE file itself must be examined")
 	ErrUnsupportedMachine  = errors.New("unsupported machine")
 )
+
+type peReader interface {
+	Base() uintptr
+	io.Closer
+	io.ReaderAt
+	io.ReadSeeker
+	Limit() uintptr
+}
+
+// PEHeaders represents the partially-parsed headers from a PE binary.
+type PEHeaders struct {
+	r              peReader
+	fileHeader     *dpe.FileHeader
+	optionalHeader *optionalHeader
+	sections       []peSectionHeader
+}
 
 type peBounds struct {
 	base  uintptr
@@ -161,6 +169,9 @@ func NewPEFromLazyDLL(ldll *windows.LazyDLL) (*PEHeaders, error) {
 	if ldll == nil {
 		return nil, os.ErrInvalid
 	}
+	if err := ldll.Load(); err != nil {
+		return nil, err
+	}
 
 	return NewPEFromHMODULE(windows.Handle(ldll.Handle()))
 }
@@ -216,20 +227,12 @@ func (peh *PEHeaders) Close() error {
 	return peh.r.Close()
 }
 
-type peReader interface {
-	Base() uintptr
-	io.Closer
-	io.ReaderAt
-	io.ReadSeeker
-	Limit() uintptr
+type rvaType interface {
+	~int8 | ~int16 | ~int32 | ~uint8 | ~uint16 | ~uint32
 }
 
 // addOffset ensures that, if off is negative, it does not underflow base.
-// Note that sometimes the underflow restriction might actually need to be
-// relaxed when dealing with modules; third-party crapware might have tampered
-// with the binary and written negative offsets that point to memory that is in
-// fact at a lower virtual address than the binary itself.
-func addOffset[O constraints.Integer](base uintptr, off O) uintptr {
+func addOffset[O rvaType](base uintptr, off O) uintptr {
 	if off >= 0 {
 		return base + uintptr(off)
 	}
@@ -255,7 +258,7 @@ func binaryRead(r io.Reader, data any) (err error) {
 // Note that currently this function will fail if rva references memory beyond
 // the bounds of the binary; in the case of modules, this may need to be relaxed
 // in some cases due to tampering by third-party crapware.
-func readStruct[T any, O constraints.Integer](r peReader, rva O) (*T, error) {
+func readStruct[T any, O rvaType](r peReader, rva O) (*T, error) {
 	switch v := r.(type) {
 	case *peFile:
 		if _, err := r.Seek(int64(rva), io.SeekStart); err != nil {
@@ -286,7 +289,7 @@ func readStruct[T any, O constraints.Integer](r peReader, rva O) (*T, error) {
 // Note that currently this function will fail if rva references memory beyond
 // the bounds of the binary; in the case of modules, this may need to be relaxed
 // in some cases due to tampering by third-party crapware.
-func readStructArray[T any, O constraints.Integer](r peReader, rva O, count int) ([]T, error) {
+func readStructArray[T any, O rvaType](r peReader, rva O, count int) ([]T, error) {
 	switch v := r.(type) {
 	case *peFile:
 		if _, err := r.Seek(int64(rva), io.SeekStart); err != nil {
@@ -372,8 +375,8 @@ func loadHeaders(r peReader) (*PEHeaders, error) {
 	}
 
 	// Read the file header
-	fileHeaderOffset := uintptr(e_lfanew) + unsafe.Sizeof(peSig)
-	if fileHeaderOffset >= r.Limit() {
+	fileHeaderOffset := uint32(e_lfanew) + uint32(unsafe.Sizeof(peSig))
+	if r.Base()+uintptr(fileHeaderOffset) >= r.Limit() {
 		return nil, ErrInvalidBinary
 	}
 
@@ -393,8 +396,8 @@ func loadHeaders(r peReader) (*PEHeaders, error) {
 	}
 
 	// Read the optional header
-	optionalHeaderOffset := fileHeaderOffset + unsafe.Sizeof(*fileHeader)
-	if optionalHeaderOffset >= r.Limit() {
+	optionalHeaderOffset := uint32(fileHeaderOffset) + uint32(unsafe.Sizeof(*fileHeader))
+	if r.Base()+uintptr(optionalHeaderOffset) >= r.Limit() {
 		return nil, ErrInvalidBinary
 	}
 
@@ -438,8 +441,8 @@ func loadHeaders(r peReader) (*PEHeaders, error) {
 	}
 
 	// Read in the section table
-	sectionTableOffset := optionalHeaderOffset + uintptr(fileHeader.SizeOfOptionalHeader)
-	if sectionTableOffset >= r.Limit() {
+	sectionTableOffset := optionalHeaderOffset + uint32(fileHeader.SizeOfOptionalHeader)
+	if r.Base()+uintptr(sectionTableOffset) >= r.Limit() {
 		return nil, ErrInvalidBinary
 	}
 
@@ -451,11 +454,15 @@ func loadHeaders(r peReader) (*PEHeaders, error) {
 	return &PEHeaders{r: r, fileHeader: fileHeader, optionalHeader: optionalHeader, sections: sections}, nil
 }
 
+type rva32 interface {
+	~int32 | ~uint32
+}
+
 // resolveRVA resolves rva, or returns 0 if unavailable.
-func resolveRVA[O constraints.Integer](nfo *PEHeaders, rva O) int64 {
+func resolveRVA[O rva32](nfo *PEHeaders, rva O) O {
 	if _, ok := nfo.r.(*peFile); !ok {
 		// Just the identity function in this case.
-		return int64(rva)
+		return rva
 	}
 
 	if rva <= 0 {
@@ -479,13 +486,13 @@ func resolveRVA[O constraints.Integer](nfo *PEHeaders, rva O) int64 {
 		if foff >= s.PointerToRawData+s.SizeOfRawData {
 			return 0
 		}
-		return int64(foff)
+		return O(foff)
 	}
 
 	return 0
 }
 
-type DataDirectoryEntry dpe.DataDirectory
+type DataDirectoryEntry = dpe.DataDirectory
 
 func (nfo *PEHeaders) dataDirectory() []DataDirectoryEntry {
 	cnt := nfo.optionalHeader.NumberOfRvaAndSizes
