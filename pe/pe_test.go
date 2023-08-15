@@ -17,6 +17,8 @@ import (
 	"golang.org/x/sys/windows"
 )
 
+// TODO(aaron): separate into cross-platform and windows-specific bits
+
 func getTestBinaryFileName() string {
 	// TODO(aaron): Test against both!
 	// NOTE: return value should match a module already loaded in our process
@@ -40,7 +42,7 @@ func TestFile(t *testing.T) {
 
 	t.Logf("Limit: 0x%08X (%d)\n", pei.r.Limit(), pei.r.Limit())
 
-	dd := pei.dataDirectory()
+	dd := pei.optionalHeader.GetDataDirectory()
 	for i, e := range dd {
 		t.Logf("%02d: V: 0x%08X, FOff: 0x%08X", i, e.VirtualAddress, resolveRVA(pei, e.VirtualAddress))
 	}
@@ -48,7 +50,7 @@ func TestFile(t *testing.T) {
 	t.Logf("\n")
 
 	for i, s := range pei.sections {
-		t.Logf("%02d: %q F: 0x%08X, FS: 0x%08X, V: 0x%08X, VS: 0x%08X", i, s.NameAsString(), s.PointerToRawData, s.SizeOfRawData, s.VirtualAddress, s.VirtualSize)
+		t.Logf("%02d: %q F: 0x%08X, FS: 0x%08X, V: 0x%08X, VS: 0x%08X", i, s.NameString(), s.PointerToRawData, s.SizeOfRawData, s.VirtualAddress, s.VirtualSize)
 	}
 
 	dbgDirAny, err := pei.DataDirectoryEntry(dpe.IMAGE_DIRECTORY_ENTRY_DEBUG)
@@ -140,10 +142,12 @@ func TestFileVsModule(t *testing.T) {
 
 	// The optional header's DataDirectory will be modified by loader relocations,
 	// so we need to exclude that from the comparison.
-	pefOHBytes := unsafe.Slice((*byte)(unsafe.Pointer(pef.optionalHeader)), unsafe.Sizeof(*pef.optionalHeader)-unsafe.Sizeof(pef.optionalHeader.DataDirectory))
+	pefOH := pef.optionalHeader.(*optionalHeaderForGOARCH)
+	pefOHBytes := unsafe.Slice((*byte)(unsafe.Pointer(pefOH)), unsafe.Sizeof(*pefOH)-unsafe.Sizeof(pefOH.DataDirectory))
 	// ImageBase is pretty much guaranteed to differ, so make a copy and set that the module's value to the file's value.
-	pemOHCopy := *pem.optionalHeader
-	pemOHCopy.ImageBase = pef.optionalHeader.ImageBase
+	pemOH := pem.optionalHeader.(*optionalHeaderForGOARCH)
+	pemOHCopy := *pemOH
+	pemOHCopy.ImageBase = pefOH.ImageBase
 
 	pemOHBytes := unsafe.Slice((*byte)(unsafe.Pointer(&pemOHCopy)), unsafe.Sizeof(pemOHCopy)-unsafe.Sizeof(pemOHCopy.DataDirectory))
 
