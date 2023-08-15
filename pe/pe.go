@@ -90,10 +90,7 @@ func (pei *peModule) Close() error {
 }
 
 func (pei *peModule) Limit() uintptr {
-	if pei.limit == 0 {
-		pei.limit = pei.base + uintptr(pei.Size())
-	}
-	return pei.limit
+	return pei.peBounds.limit
 }
 
 // NewPEFromBaseAddressAndSize parses the headers in a PE binary loaded
@@ -315,9 +312,7 @@ func readStructArray[T any, O constraints.Integer](r peReader, rva O, count int)
 	}
 }
 
-type peSectionHeader struct {
-	dpe.SectionHeader32
-}
+type peSectionHeader dpe.SectionHeader32
 
 func (s *peSectionHeader) NameAsString() string {
 	// s.Name is UTF-8. When the string's length is < len(s.Name), the remaining
@@ -398,7 +393,7 @@ func loadHeaders(r peReader) (*PEHeaders, error) {
 	}
 
 	// Read the optional header
-	optionalHeaderOffset := fileHeaderOffset + unsafe.Sizeof(dpe.FileHeader{})
+	optionalHeaderOffset := fileHeaderOffset + unsafe.Sizeof(*fileHeader)
 	if optionalHeaderOffset >= r.Limit() {
 		return nil, ErrInvalidBinary
 	}
@@ -463,7 +458,7 @@ func resolveRVA[O constraints.Integer](nfo *PEHeaders, rva O) int64 {
 		return int64(rva)
 	}
 
-	if rva < 0 {
+	if rva <= 0 {
 		return 0
 	}
 
@@ -490,7 +485,7 @@ func resolveRVA[O constraints.Integer](nfo *PEHeaders, rva O) int64 {
 	return 0
 }
 
-type DataDirectoryEntry = dpe.DataDirectory
+type DataDirectoryEntry dpe.DataDirectory
 
 func (nfo *PEHeaders) dataDirectory() []DataDirectoryEntry {
 	cnt := nfo.optionalHeader.NumberOfRvaAndSizes

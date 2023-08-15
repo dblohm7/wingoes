@@ -38,7 +38,7 @@ const (
 const S_FALSE = HRESULT(1)
 
 var (
-	// genericError encodes a Error whose message string is very generic.
+	// genericError encodes an Error whose message string is very generic.
 	genericError = Error(hresultFromFacilityAndCode(hrFail, facilityWin32, hrCode(windows.ERROR_UNIDENTIFIED_ERROR)))
 )
 
@@ -121,7 +121,7 @@ func hresultFromFacilityAndCode(isFail failBit, f hrFacility, c hrCode) HRESULT 
 	return HRESULT(r)
 }
 
-// ErrorFromErrno creates a Error from e.
+// ErrorFromErrno creates an Error from e.
 func ErrorFromErrno(e windows.Errno) Error {
 	if e == windows.ERROR_SUCCESS {
 		return Error(hrS_OK)
@@ -138,7 +138,7 @@ func ErrorFromErrno(e windows.Errno) Error {
 	return Error(hresultFromFacilityAndCode(hrFail, facilityWin32, hrCode(e)))
 }
 
-// ErrorFromNTStatus creates a Error from s.
+// ErrorFromNTStatus creates an Error from s.
 func ErrorFromNTStatus(s windows.NTStatus) Error {
 	if s == windows.STATUS_SUCCESS {
 		return Error(hrS_OK)
@@ -146,12 +146,12 @@ func ErrorFromNTStatus(s windows.NTStatus) Error {
 	return Error(HRESULT(s) | hrFacilityNTBit)
 }
 
-// ErrorFromHRESULT creates a Error from hr.
+// ErrorFromHRESULT creates an Error from hr.
 func ErrorFromHRESULT(hr HRESULT) Error {
 	return Error(hr)
 }
 
-// NewError converts e into a Error if e's type is supported. It returns
+// NewError converts e into an Error if e's type is supported. It returns
 // both the Error and a bool indicating whether the conversion was successful.
 func NewError(e any) (Error, bool) {
 	switch v := e.(type) {
