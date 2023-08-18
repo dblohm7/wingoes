@@ -87,6 +87,7 @@ func (pef *peFile) Limit() uintptr {
 type peModule struct {
 	*bytes.Reader
 	peBounds
+	modLock windows.Handle
 }
 
 func (pei *peModule) Base() uintptr {
@@ -94,7 +95,7 @@ func (pei *peModule) Base() uintptr {
 }
 
 func (pei *peModule) Close() error {
-	return nil
+	return windows.FreeLibrary(pei.modLock)
 }
 
 func (pei *peModule) Limit() uintptr {
@@ -106,12 +107,27 @@ func (pei *peModule) Limit() uintptr {
 // size. If you do not have the size, use NewPEFromBaseAddress instead.
 // Upon success it returns a non-nil *PEHeaders, otherwise it returns a nil
 // *PEHeaders and a non-nil error.
-// If the module is unloaded while the returned *PEHeaders is still in use,
-// its behaviour will become undefined.
 func NewPEFromBaseAddressAndSize(baseAddr uintptr, size uint32) (*PEHeaders, error) {
+	// Grab a strong reference to the module until we're done with it.
+	var modLock windows.Handle
+	if err := windows.GetModuleHandleEx(
+		windows.GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS,
+		(*uint16)(unsafe.Pointer(baseAddr)),
+		&modLock,
+	); err != nil {
+		return nil, err
+	}
+
 	slc := unsafe.Slice((*byte)(unsafe.Pointer(baseAddr)), size)
 	r := bytes.NewReader(slc)
-	peMod := &peModule{Reader: r, peBounds: peBounds{base: baseAddr, limit: baseAddr + uintptr(size)}}
+	peMod := &peModule{
+		Reader: r,
+		peBounds: peBounds{
+			base:  baseAddr,
+			limit: baseAddr + uintptr(size),
+		},
+		modLock: modLock,
+	}
 	return loadHeaders(peMod)
 }
 
@@ -119,8 +135,6 @@ func NewPEFromBaseAddressAndSize(baseAddr uintptr, size uint32) (*PEHeaders, err
 // current process's address space at address baseAddr.
 // Upon success it returns a non-nil *PEHeaders, otherwise it returns a nil
 // *PEHeaders and a non-nil error.
-// If the module is unloaded while the returned *PEHeaders is still in use,
-// its behaviour will become undefined.
 func NewPEFromBaseAddress(baseAddr uintptr) (*PEHeaders, error) {
 	var modInfo windows.ModuleInfo
 	if err := windows.GetModuleInformation(
@@ -139,8 +153,6 @@ func NewPEFromBaseAddress(baseAddr uintptr) (*PEHeaders, error) {
 // is currently loaded into the current process's address space.
 // Upon success it returns a non-nil *PEHeaders, otherwise it returns a nil
 // *PEHeaders and a non-nil error.
-// If the module is unloaded while the returned *PEHeaders is still in use,
-// its behaviour will become undefined.
 func NewPEFromHMODULE(hmodule windows.Handle) (*PEHeaders, error) {
 	// HMODULEs are just a loaded module's base address with the lowest two
 	// bits used for flags (see docs for LoadLibraryExW).
