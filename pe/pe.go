@@ -26,21 +26,21 @@ import (
 // The following constants are from the PE spec
 const (
 	maxNumSections                 = 96
-	mzSignature                    = uint16(0x5A4D)
+	mzSignature                    = uint16(0x5A4D) // little-endian
 	offsetIMAGE_DOS_HEADERe_lfanew = 0x3C
-	peSignature                    = uint32(0x00004550)
+	peSignature                    = uint32(0x00004550) // little-endian
 )
 
 var (
 	ErrBadLength       = errors.New("effective length did not match expected length")
 	ErrBadCodeView     = errors.New("invalid CodeView debug info")
-	ErrNotCodeView     = errors.New("debug info is not CodeView")
-	ErrNotPresent      = errors.New("not present in this PE image")
 	ErrIndexOutOfRange = errors.New("index out of range")
 	// ErrInvalidBinary is returned whenever the headers do not parse as expected,
 	// or reference locations outside the bounds of the PE file or module.
 	// The headers might be corrupt, malicious, or have been tampered with.
 	ErrInvalidBinary       = errors.New("invalid PE binary")
+	ErrNotCodeView         = errors.New("debug info is not CodeView")
+	ErrNotPresent          = errors.New("not present in this PE image")
 	ErrResolvingFileRVA    = errors.New("could not resolve file RVA")
 	ErrUnavailableInModule = errors.New("this information is unavailable from loaded modules; the PE file itself must be examined")
 	ErrUnsupportedMachine  = errors.New("unsupported machine")
@@ -66,10 +66,10 @@ func (s *SectionHeader) NameString() string {
 }
 
 type peReader interface {
-	Base() uintptr
 	io.Closer
 	io.ReaderAt
 	io.ReadSeeker
+	Base() uintptr
 	Limit() uintptr
 }
 
@@ -135,7 +135,7 @@ type peFile struct {
 }
 
 func (pef *peFile) Base() uintptr {
-	return pef.peBounds.base
+	return pef.base
 }
 
 func (pef *peFile) Limit() uintptr {
@@ -154,11 +154,11 @@ type peModule struct {
 }
 
 func (pei *peModule) Base() uintptr {
-	return pei.peBounds.base
+	return pei.base
 }
 
 func (pei *peModule) Limit() uintptr {
-	return pei.peBounds.limit
+	return pei.limit
 }
 
 // NewPEFromFileName opens a PE binary located at filename and parses its PE
