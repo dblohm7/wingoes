@@ -8,9 +8,5 @@
 
 package wingoes
 
-import (
-	"fmt"
-)
-
 // HRESULT is equivalent to the HRESULT type in the Win32 SDK for C/C++.
 type HRESULT int32
