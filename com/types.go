@@ -13,18 +13,6 @@ import (
 	"golang.org/x/sys/windows"
 )
 
-// IID is a GUID that represents an interface ID.
-type IID windows.GUID
-
-// CLSID is a GUID that represents a class ID.
-type CLSID windows.GUID
-
-// AppID is a GUID that represents an application ID.
-type AppID windows.GUID
-
-// ServiceID is a GUID that represents a service ID.
-type ServiceID windows.GUID
-
 type coMTAUsageCookie windows.Handle
 
 type coCLSCTX uint32
