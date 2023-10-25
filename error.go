@@ -306,3 +306,20 @@ func (e Error) Error() string {
 	}
 	return windows.UTF16ToString(buf[:lenExclNul])
 }
+
+// Unwrap permits extraction of underlying windows.NTStatus or windows.Errno
+// errors that are encoded within e.
+func (e Error) Unwrap() error {
+	// Order is important! We need earlier checks to exclude certain things that
+	// would otherwise be (in this case) false positives in later checks!
+	switch {
+	case e.IsOK():
+		return nil
+	case e.IsAvailableAsNTStatus():
+		return e.AsNTStatus()
+	case e.IsAvailableAsErrno():
+		return e.AsErrno()
+	default:
+		return nil
+	}
+}
