@@ -107,18 +107,27 @@ func buildTestProg(t *testing.T, binary string, flags ...string) (string, error)
 		// Don't get confused if goToolPath calls t.Skip.
 		target.err = errors.New("building test called t.Skip")
 
-		exe := filepath.Join(dir, name+".exe")
+		noresexe := filepath.Join(dir, name+"-nores.exe")
 
-		t.Logf("running go build -o %s %s", exe, strings.Join(flags, " "))
-		cmd := exec.Command(goToolPath(t), append([]string{"build", "-o", exe}, flags...)...)
+		t.Logf("running go build -o %s %s", noresexe, strings.Join(flags, " "))
+		cmd := exec.Command(goToolPath(t), append([]string{"build", "-o", noresexe}, flags...)...)
 		cmd.Dir = "testdata/" + binary
 		out, err := cmd.CombinedOutput()
 		if err != nil {
 			target.err = fmt.Errorf("building %s %v: %v\n%s", binary, flags, err, out)
-		} else {
-			target.exe = exe
-			target.err = nil
+			return
 		}
+
+		exe := filepath.Join(dir, name+".exe")
+
+		t.Logf("binding manifest to %s => %s", noresexe, exe)
+		if err := addManifest(exe, noresexe); err != nil {
+			target.err = fmt.Errorf("binding manifest %s %v: %v", binary, flags, err)
+			return
+		}
+
+		target.exe = exe
+		target.err = nil
 	})
 
 	return target.exe, target.err

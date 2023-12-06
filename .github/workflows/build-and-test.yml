@@ -1,0 +1,42 @@
+# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-go
+
+name: Go
+
+on:
+  push:
+    branches: [ "main", "bindgen", "ci" ]
+  pull_request:
+    branches: [ "main", "bindgen" ]
+
+jobs:
+
+  build:
+    runs-on: windows-latest
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.21.x'
+
+    - name: Install go-winres
+      run: go install github.com/tc-hib/go-winres@latest
+
+    - name: Set up build directory
+      run: mkdir -p ./bin
+
+    - name: Build
+      run: |
+        go build -v -o ./bin ./...
+        go test -c -o ./bin ./...
+
+    - name: Bind resources to all binaries
+      shell: bash
+      run: |
+        for f in ./bin/*.exe; do
+          go-winres patch $f
+        done
+
+    - name: Test
+      run: go test -o ./bin -v ./...
