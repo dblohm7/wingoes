@@ -146,9 +146,5 @@ func (s *COMAllocatedString) UTF16() []uint16 {
 
 // UTF16Ptr returns a pointer to a NUL-terminated copy of the UTF-16 string.
 func (s *COMAllocatedString) UTF16Ptr() *uint16 {
-	if slc := s.UTF16(); slc != nil {
-		return &slc[0]
-	}
-
-	return nil
+	return unsafe.SliceData(s.UTF16())
 }
