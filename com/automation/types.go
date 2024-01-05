@@ -34,6 +34,9 @@ func NewBSTRFromUTF16(us []uint16) BSTR {
 
 // NewBSTR creates a new BSTR from up, a C-style string pointer to UTF-16 code units.
 func NewBSTRFromUTF16Ptr(up *uint16) BSTR {
+	if up == nil {
+		return 0
+	}
 	return sysAllocString(up)
 }
 
@@ -82,7 +85,9 @@ func (bs *BSTR) IsNil() bool {
 
 // Close frees bs.
 func (bs *BSTR) Close() error {
-	sysFreeString(*bs)
-	*bs = 0
+	if *bs != 0 {
+		sysFreeString(*bs)
+		*bs = 0
+	}
 	return nil
 }
