@@ -32,18 +32,36 @@ const (
 )
 
 var (
-	ErrBadLength       = errors.New("effective length did not match expected length")
-	ErrBadCodeView     = errors.New("invalid CodeView debug info")
+	// ErrBadLength is returned when the actual length of a data field in the
+	// binary is shorter than the expected length of that field.
+	ErrBadLength = errors.New("effective length did not match expected length")
+	// ErrBadCodeView is returned by (*PEHeaders).ExtractCodeViewInfo if the data
+	// at the requested address does not appear to contain valid CodeView information.
+	ErrBadCodeView = errors.New("invalid CodeView debug info")
+	// ErrIndexOutOfRange is returned by (*PEHeaders).DataDirectoryEntry if the
+	// specified index is greater than the maximum allowable index.
 	ErrIndexOutOfRange = errors.New("index out of range")
 	// ErrInvalidBinary is returned whenever the headers do not parse as expected,
 	// or reference locations outside the bounds of the PE file or module.
 	// The headers might be corrupt, malicious, or have been tampered with.
-	ErrInvalidBinary       = errors.New("invalid PE binary")
-	ErrNotCodeView         = errors.New("debug info is not CodeView")
-	ErrNotPresent          = errors.New("not present in this PE image")
-	ErrResolvingFileRVA    = errors.New("could not resolve file RVA")
+	ErrInvalidBinary = errors.New("invalid PE binary")
+	// ErrBadCodeView is returned by (*PEHeaders).ExtractCodeViewInfo if the data
+	// at the requested address contains a non-CodeView debug info format.
+	ErrNotCodeView = errors.New("debug info is not CodeView")
+	// ErrIndexOutOfRange is returned by (*PEHeaders).DataDirectoryEntry if the
+	// corresponding entry is not populated in the PE image.
+	ErrNotPresent = errors.New("not present in this PE image")
+	// ErrResolvingFileRVA is returned when the result of arithmetic on a relative
+	// virtual address did not resolve to a valid RVA.
+	ErrResolvingFileRVA = errors.New("could not resolve file RVA")
+	// ErrUnavailableInModule is returned when requesting data from the binary
+	// that is not mapped into memory when loaded. The information must be
+	// loaded from a file-based PEHeaders.
 	ErrUnavailableInModule = errors.New("this information is unavailable from loaded modules; the PE file itself must be examined")
-	ErrUnsupportedMachine  = errors.New("unsupported machine")
+	// ErrUnsupportedMachine is returned if the binary's CPU architecture is
+	// unsupported. This package currently implements support for x86, amd64,
+	// and arm64.
+	ErrUnsupportedMachine = errors.New("unsupported machine")
 )
 
 // FileHeader is the PE/COFF IMAGE_FILE_HEADER structure.
