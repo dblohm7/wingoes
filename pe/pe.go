@@ -614,7 +614,8 @@ func (u *IMAGE_DEBUG_INFO_CODEVIEW_UNPACKED) unpack(r *bufio.Reader) error {
 		return err
 	}
 
-	pdbBytes := make([]byte, 0, 16)
+	var storage [16]byte
+	pdbBytes := storage[:0]
 	for b, err := r.ReadByte(); err == nil && b != 0; b, err = r.ReadByte() {
 		pdbBytes = append(pdbBytes, b)
 	}
