@@ -479,8 +479,8 @@ const (
 // currently return the DataDirectoryEntry itself, however it will return more
 // sophisticated information for the following values of idx:
 //
-// IMAGE_DIRECTORY_ENTRY_SECURITY returns []AuthenticodeCert
-// IMAGE_DIRECTORY_ENTRY_DEBUG returns []IMAGE_DEBUG_DIRECTORY
+// * IMAGE_DIRECTORY_ENTRY_SECURITY returns []AuthenticodeCert
+// * IMAGE_DIRECTORY_ENTRY_DEBUG returns []IMAGE_DEBUG_DIRECTORY
 //
 // Note that other idx values _will_ be modified in the future to support more
 // sophisticated return values, so be careful to structure your type assertions
