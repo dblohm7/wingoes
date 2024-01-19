@@ -4,9 +4,9 @@ name: Go
 
 on:
   push:
-    branches: [ "main", "bindgen", "ci" ]
+    branches: [ "main", "bindgen", "ci", "com_objects_v3" ]
   pull_request:
-    branches: [ "main", "bindgen" ]
+    branches: [ "main", "bindgen", "ci" ]
 
 jobs:
 
