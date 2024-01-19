@@ -564,21 +564,44 @@ func alignUp[V constraints.Integer](v V, powerOfTwo uint8) V {
 	return v + ((-v) & (V(powerOfTwo) - 1))
 }
 
+// IMAGE_DEBUG_TYPE is an enumeration for indicating the type of debug
+// information referenced by a particular [IMAGE_DEBUG_DIRECTORY].
+type IMAGE_DEBUG_TYPE uint32
+
+const (
+	IMAGE_DEBUG_TYPE_UNKNOWN               IMAGE_DEBUG_TYPE = 0
+	IMAGE_DEBUG_TYPE_COFF                  IMAGE_DEBUG_TYPE = 1
+	IMAGE_DEBUG_TYPE_CODEVIEW              IMAGE_DEBUG_TYPE = 2
+	IMAGE_DEBUG_TYPE_FPO                   IMAGE_DEBUG_TYPE = 3
+	IMAGE_DEBUG_TYPE_MISC                  IMAGE_DEBUG_TYPE = 4
+	IMAGE_DEBUG_TYPE_EXCEPTION             IMAGE_DEBUG_TYPE = 5
+	IMAGE_DEBUG_TYPE_FIXUP                 IMAGE_DEBUG_TYPE = 6
+	IMAGE_DEBUG_TYPE_OMAP_TO_SRC           IMAGE_DEBUG_TYPE = 7
+	IMAGE_DEBUG_TYPE_OMAP_FROM_SRC         IMAGE_DEBUG_TYPE = 8
+	IMAGE_DEBUG_TYPE_BORLAND               IMAGE_DEBUG_TYPE = 9
+	IMAGE_DEBUG_TYPE_RESERVED10            IMAGE_DEBUG_TYPE = 10
+	IMAGE_DEBUG_TYPE_BBT                   IMAGE_DEBUG_TYPE = IMAGE_DEBUG_TYPE_RESERVED10
+	IMAGE_DEBUG_TYPE_CLSID                 IMAGE_DEBUG_TYPE = 11
+	IMAGE_DEBUG_TYPE_VC_FEATURE            IMAGE_DEBUG_TYPE = 12
+	IMAGE_DEBUG_TYPE_POGO                  IMAGE_DEBUG_TYPE = 13
+	IMAGE_DEBUG_TYPE_ILTCG                 IMAGE_DEBUG_TYPE = 14
+	IMAGE_DEBUG_TYPE_MPX                   IMAGE_DEBUG_TYPE = 15
+	IMAGE_DEBUG_TYPE_REPRO                 IMAGE_DEBUG_TYPE = 16
+	IMAGE_DEBUG_TYPE_SPGO                  IMAGE_DEBUG_TYPE = 18
+	IMAGE_DEBUG_TYPE_EX_DLLCHARACTERISTICS IMAGE_DEBUG_TYPE = 20
+)
+
 // IMAGE_DEBUG_DIRECTORY describes debug information embedded in the binary.
 type IMAGE_DEBUG_DIRECTORY struct {
 	Characteristics  uint32
 	TimeDateStamp    uint32
 	MajorVersion     uint16
 	MinorVersion     uint16
-	Type             uint32 // an IMAGE_DEBUG_TYPE constant
+	Type             IMAGE_DEBUG_TYPE
 	SizeOfData       uint32
 	AddressOfRawData uint32
 	PointerToRawData uint32
 }
-
-// IMAGE_DEBUG_TYPE_CODEVIEW identifies the current IMAGE_DEBUG_DIRECTORY as
-// pointing to CodeView debug information.
-const IMAGE_DEBUG_TYPE_CODEVIEW = 2
 
 func (nfo *PEHeaders) extractDebugInfo(dde DataDirectoryEntry) (any, error) {
 	rva := resolveRVA(nfo, dde.VirtualAddress)
