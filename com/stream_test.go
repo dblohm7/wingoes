@@ -47,7 +47,7 @@ func memoryStream(t *testing.T, useLegacy bool) {
 	// Only try this on supported 64-bit archs so that the test doesn't run the
 	// risk of crashing due to OOM.
 	if runtime.GOARCH != "386" {
-		tooBig := make([]byte, maxStreamRWLen+1)
+		tooBig := getTooBigSlice()
 		_, err = newMemoryStreamInternal(tooBig, useLegacy)
 		if err == nil {
 			t.Errorf("Unexpected success creating too-large memory stream")
