@@ -65,7 +65,7 @@ func getCodeViewInfoViaSystem(filename string) (result *IMAGE_DEBUG_INFO_CODEVIE
 	info := _SYMSRV_INDEX_INFO{
 		SizeOfStruct: uint32(unsafe.Sizeof(_SYMSRV_INDEX_INFO{})),
 	}
-	if err := symSrvGetFileIndexInfoW(filename16, &info, 0); err != nil {
+	if err := symSrvGetFileIndexInfo(filename16, &info, 0); err != nil {
 		return nil, err
 	}
 

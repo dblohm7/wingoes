@@ -484,6 +484,8 @@ const (
 	IMAGE_DIRECTORY_ENTRY_COM_DESCRIPTOR = DataDirectoryIndex(dpe.IMAGE_DIRECTORY_ENTRY_COM_DESCRIPTOR)
 )
 
+const _IMAGE_NUMBEROF_DIRECTORY_ENTRIES = 16
+
 // DataDirectoryEntry returns information from nfo's data directory at index idx.
 // The type of the return value depends on the value of idx. Most values for idx
 // currently return the DataDirectoryEntry itself, however it will return more
@@ -496,9 +498,13 @@ const (
 // sophisticated return values, so be careful to structure your type assertions
 // accordingly.
 func (nfo *PEHeaders) DataDirectoryEntry(idx DataDirectoryIndex) (any, error) {
+	if int(idx) >= _IMAGE_NUMBEROF_DIRECTORY_ENTRIES {
+		return nil, ErrIndexOutOfRange
+	}
+
 	dd := nfo.optionalHeader.GetDataDirectory()
 	if int(idx) >= len(dd) {
-		return nil, ErrIndexOutOfRange
+		return nil, ErrNotPresent
 	}
 
 	dde := dd[idx]

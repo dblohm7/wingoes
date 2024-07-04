@@ -66,7 +66,7 @@ func imageNtHeader(base uintptr) (ret *_IMAGE_NT_HEADERS_FIXED, err error) {
 	return
 }
 
-func symSrvGetFileIndexInfoW(file *uint16, info *_SYMSRV_INDEX_INFO, flags uint32) (err error) {
+func symSrvGetFileIndexInfo(file *uint16, info *_SYMSRV_INDEX_INFO, flags uint32) (err error) {
 	err = procSymSrvGetFileIndexInfoW.Find()
 	if err != nil {
 		return

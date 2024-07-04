@@ -44,4 +44,4 @@ type _IMAGE_NT_HEADERS_FIXED struct {
 //sys imageNtHeader(base uintptr) (ret *_IMAGE_NT_HEADERS_FIXED, err error) [failretval==nil] = dbghelp.ImageNtHeader
 // TODO(aaron): Maybe use to test resolveRVA?
 // imageSectionHeader(ntHeaders *_IMAGE_NT_HEADERS_FIXED, base uintptr, rva uint32) (ret *SectionHeader, err error) [failretval==nil] = dbghelp.ImageRvaToSection
-//sys symSrvGetFileIndexInfoW(file *uint16, info *_SYMSRV_INDEX_INFO, flags uint32) (err error) [int32(failretval)==0] = dbghelp.SymSrvGetFileIndexInfoW?
+//sys symSrvGetFileIndexInfo(file *uint16, info *_SYMSRV_INDEX_INFO, flags uint32) (err error) [int32(failretval)==0] = dbghelp.SymSrvGetFileIndexInfoW?
