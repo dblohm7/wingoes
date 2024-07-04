@@ -32,7 +32,7 @@ func init() {
 func usage() {
 	fmt.Fprintf(flag.CommandLine.Output(), "Usage of %s:\n", os.Args[0])
 	flag.PrintDefaults()
-	fmt.Fprintln(flag.CommandLine.Output(), "  <filePath>\n\tpath to PE file\n")
+	fmt.Fprintln(flag.CommandLine.Output(), "  <filePath>\n\tpath to PE file")
 }
 
 func usageln(args ...any) {
