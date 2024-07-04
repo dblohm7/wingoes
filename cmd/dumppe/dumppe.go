@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"log"
 	"os"
 
 	"github.com/dblohm7/wingoes/pe"
@@ -28,28 +29,33 @@ func init() {
 	flag.Parse()
 }
 
-func errmsg(format string, args ...any) {
-	fmt.Fprintf(flag.CommandLine.Output(), format, args...)
-}
-
 func usage() {
 	fmt.Fprintf(flag.CommandLine.Output(), "Usage of %s:\n", os.Args[0])
 	flag.PrintDefaults()
-	fmt.Fprintf(flag.CommandLine.Output(), "  <filePath>\n\tpath to PE file\n")
-	os.Exit(1)
+	fmt.Fprintln(flag.CommandLine.Output(), "  <filePath>\n\tpath to PE file\n")
+}
+
+func usageln(args ...any) {
+	fmt.Fprintln(flag.CommandLine.Output(), args...)
+	usage()
+	os.Exit(2)
+}
+
+func usagef(format string, args ...any) {
+	fmt.Fprintf(flag.CommandLine.Output(), format, args...)
+	usage()
+	os.Exit(2)
 }
 
 func main() {
 	filePath := flag.Arg(0)
 	if filePath == "" {
-		errmsg("No file path provided\n")
-		usage()
+		usageln("No file path provided")
 	}
 
 	pef, err := pe.NewPEFromFileName(filePath)
 	if err != nil {
-		errmsg("error opening %q: %v\n", filePath, err)
-		os.Exit(1)
+		log.Fatalf("error opening %q: %v\n", filePath, err)
 	}
 	defer pef.Close()
 
