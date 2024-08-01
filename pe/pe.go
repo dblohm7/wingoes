@@ -296,7 +296,7 @@ func readStructArray[T any, R rvaType](r peReader, rva R, count int) ([]T, error
 		if !ok {
 			return nil, ErrInvalidBinary
 		}
-		szT := uint32(reflect.ArrayOf(count, reflect.TypeOf((*T)(nil)).Elem()).Size())
+		szT := uint32(reflect.ArrayOf(count, reflect.TypeFor[T]()).Size())
 		if addr2, ok := addOffset(addr, szT); !ok || addr2 >= v.Limit() {
 			return nil, ErrInvalidBinary
 		}
