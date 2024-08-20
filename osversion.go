@@ -166,6 +166,7 @@ const (
 	Win11BuildRTM  = Win11BuildConstant(22000)
 	Win11Build22H2 = Win11BuildConstant(22621)
 	Win11Build23H2 = Win11BuildConstant(22631)
+	Win11Build24H2 = Win11BuildConstant(26100)
 )
 
 // IsWin11OrGreater returns true when running on any release of Windows 11,
