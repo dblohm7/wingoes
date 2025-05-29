@@ -1,11 +1,11 @@
 module github.com/dblohm7/wingoes
 
-go 1.22
+go 1.25.0
 
 require (
 	github.com/tc-hib/winres v0.2.1
 	golang.org/x/exp v0.0.0-20230127140709-cafedaf64729
-	golang.org/x/sys v0.5.0
+	golang.org/x/sys v0.45.0
 	golang.org/x/tools v0.6.0
 )
 

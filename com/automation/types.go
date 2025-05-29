@@ -50,8 +50,8 @@ func (bs *BSTR) String() string {
 	return windows.UTF16ToString(bs.toUTF16())
 }
 
-// toUTF16 is unsafe for general use because it returns a pointer that is
-// not managed by the Go GC.
+// toUTF16 is unsafe for general use because it returns a slice referencing a
+// pointer that is not managed by the Go GC.
 func (bs *BSTR) toUTF16() []uint16 {
 	return unsafe.Slice(bs.toUTF16Ptr(), bs.Len())
 }
