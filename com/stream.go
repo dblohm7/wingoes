@@ -13,7 +13,6 @@ import (
 	"unsafe"
 
 	"github.com/dblohm7/wingoes"
-	"github.com/dblohm7/wingoes/internal"
 	"golang.org/x/sys/windows"
 )
 
@@ -326,17 +325,8 @@ const hrE_OUTOFMEMORY = wingoes.HRESULT(-((0x8007000E ^ 0xFFFFFFFF) + 1))
 // copy of initialBytes. Its seek pointer is guaranteed to reference the
 // beginning of the stream.
 func NewMemoryStream(initialBytes []byte) (result Stream, _ error) {
-	return newMemoryStreamInternal(initialBytes, false)
-}
-
-func newMemoryStreamInternal(initialBytes []byte, forceLegacy bool) (result Stream, _ error) {
 	if len(initialBytes) > maxStreamRWLen {
 		return result, wingoes.ErrorFromHRESULT(hrE_OUTOFMEMORY)
-	}
-
-	// SHCreateMemStream exists on Win7 but is not safe for us to use until Win8.
-	if forceLegacy || !wingoes.IsWin8OrGreater() {
-		return newMemoryStreamLegacy(initialBytes)
 	}
 
 	var base *byte
@@ -352,35 +342,6 @@ func newMemoryStreamInternal(initialBytes []byte, forceLegacy bool) (result Stre
 	}
 
 	obj := result.Make(&punk).(Stream)
-	if _, err := obj.Seek(0, io.SeekStart); err != nil {
-		return result, err
-	}
-
-	return obj, nil
-}
-
-func newMemoryStreamLegacy(initialBytes []byte) (result Stream, _ error) {
-	ppstream := NewABIReceiver()
-	hr := createStreamOnHGlobal(internal.HGLOBAL(0), true, ppstream)
-	if e := wingoes.ErrorFromHRESULT(hr); e.Failed() {
-		return result, e
-	}
-
-	obj := result.Make(ppstream).(Stream)
-
-	if err := obj.SetSize(uint64(len(initialBytes))); err != nil {
-		return result, err
-	}
-
-	if len(initialBytes) == 0 {
-		return obj, nil
-	}
-
-	_, err := obj.Write(initialBytes)
-	if err != nil {
-		return result, err
-	}
-
 	if _, err := obj.Seek(0, io.SeekStart); err != nil {
 		return result, err
 	}

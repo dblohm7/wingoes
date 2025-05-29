@@ -15,12 +15,7 @@ import (
 )
 
 func TestStream(t *testing.T) {
-	t.Run("Default", func(t *testing.T) { memoryStream(t, false) })
-	t.Run("Legacy", func(t *testing.T) { memoryStream(t, true) })
-}
-
-func memoryStream(t *testing.T, useLegacy bool) {
-	empty1, err := newMemoryStreamInternal(nil, useLegacy)
+	empty1, err := NewMemoryStream(nil)
 	if err != nil {
 		t.Fatalf("Error calling NewMemoryStream(nil): %v", err)
 	}
@@ -32,7 +27,7 @@ func memoryStream(t *testing.T, useLegacy bool) {
 		t.Errorf("Unexpected size, got %d, want 0", size)
 	}
 
-	empty2, err := newMemoryStreamInternal([]byte{}, useLegacy)
+	empty2, err := NewMemoryStream([]byte{})
 	if err != nil {
 		t.Fatalf("Error calling NewMemoryStream(nil): %v", err)
 	}
@@ -48,14 +43,14 @@ func memoryStream(t *testing.T, useLegacy bool) {
 	// risk of crashing due to OOM.
 	if runtime.GOARCH != "386" {
 		tooBig := getTooBigSlice()
-		_, err = newMemoryStreamInternal(tooBig, useLegacy)
+		_, err = NewMemoryStream(tooBig)
 		if err == nil {
 			t.Errorf("Unexpected success creating too-large memory stream")
 		}
 	}
 
 	values := makeTestBuf(16)
-	stream, err := newMemoryStreamInternal(values, useLegacy)
+	stream, err := NewMemoryStream(values)
 	if err != nil {
 		t.Fatalf("Error calling NewMemoryStream(%d): %v", len(values), err)
 	}
@@ -143,7 +138,7 @@ func memoryStream(t *testing.T, useLegacy bool) {
 	}
 
 	// Chunked write with EOF
-	wstream, err := newMemoryStreamInternal(nil, useLegacy)
+	wstream, err := NewMemoryStream(nil)
 	if err != nil {
 		t.Fatalf("Error calling NewMemoryStream(nil): %v", err)
 	}

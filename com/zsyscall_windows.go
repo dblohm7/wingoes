@@ -7,7 +7,6 @@ import (
 	"unsafe"
 
 	"github.com/dblohm7/wingoes"
-	"github.com/dblohm7/wingoes/internal"
 	"golang.org/x/sys/windows"
 )
 
@@ -44,14 +43,13 @@ var (
 	modoleaut32 = windows.NewLazySystemDLL("oleaut32.dll")
 	modshlwapi  = windows.NewLazySystemDLL("shlwapi.dll")
 
-	procCoCreateInstance      = modole32.NewProc("CoCreateInstance")
-	procCoGetApartmentType    = modole32.NewProc("CoGetApartmentType")
-	procCoIncrementMTAUsage   = modole32.NewProc("CoIncrementMTAUsage")
-	procCoInitializeEx        = modole32.NewProc("CoInitializeEx")
-	procCoInitializeSecurity  = modole32.NewProc("CoInitializeSecurity")
-	procCreateStreamOnHGlobal = modole32.NewProc("CreateStreamOnHGlobal")
-	procSetOaNoCache          = modoleaut32.NewProc("SetOaNoCache")
-	procSHCreateMemStream     = modshlwapi.NewProc("SHCreateMemStream")
+	procCoCreateInstance     = modole32.NewProc("CoCreateInstance")
+	procCoGetApartmentType   = modole32.NewProc("CoGetApartmentType")
+	procCoIncrementMTAUsage  = modole32.NewProc("CoIncrementMTAUsage")
+	procCoInitializeEx       = modole32.NewProc("CoInitializeEx")
+	procCoInitializeSecurity = modole32.NewProc("CoInitializeSecurity")
+	procSetOaNoCache         = modoleaut32.NewProc("SetOaNoCache")
+	procSHCreateMemStream    = modshlwapi.NewProc("SHCreateMemStream")
 )
 
 func coCreateInstance(clsid *CLSID, unkOuter *IUnknownABI, clsctx coCLSCTX, iid *IID, ppv **IUnknownABI) (hr wingoes.HRESULT) {
@@ -80,16 +78,6 @@ func coInitializeEx(reserved uintptr, flags uint32) (hr wingoes.HRESULT) {
 
 func coInitializeSecurity(sd *windows.SECURITY_DESCRIPTOR, authSvcLen int32, authSvc *soleAuthenticationService, reserved1 uintptr, authnLevel rpcAuthnLevel, impLevel rpcImpersonationLevel, authList *soleAuthenticationList, capabilities authCapabilities, reserved2 uintptr) (hr wingoes.HRESULT) {
 	r0, _, _ := syscall.SyscallN(procCoInitializeSecurity.Addr(), uintptr(unsafe.Pointer(sd)), uintptr(authSvcLen), uintptr(unsafe.Pointer(authSvc)), uintptr(reserved1), uintptr(authnLevel), uintptr(impLevel), uintptr(unsafe.Pointer(authList)), uintptr(capabilities), uintptr(reserved2))
-	hr = wingoes.HRESULT(r0)
-	return
-}
-
-func createStreamOnHGlobal(hglobal internal.HGLOBAL, deleteOnRelease bool, stream **IUnknownABI) (hr wingoes.HRESULT) {
-	var _p0 uint32
-	if deleteOnRelease {
-		_p0 = 1
-	}
-	r0, _, _ := syscall.SyscallN(procCreateStreamOnHGlobal.Addr(), uintptr(hglobal), uintptr(_p0), uintptr(unsafe.Pointer(stream)))
 	hr = wingoes.HRESULT(r0)
 	return
 }
