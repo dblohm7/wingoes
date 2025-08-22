@@ -27,13 +27,34 @@ func TestPE(t *testing.T) {
 		t.Run(fmt.Sprintf("FileVsModule_%s", base), func(t *testing.T) { testFileVsModule(t, file) })
 		t.Run(fmt.Sprintf("VersionInfo_%s", base), func(t *testing.T) { testVersionInfo(t, file) })
 	}
+
+	t.Run("FileFromBytes", func(t *testing.T) { testFileFromBytes(t, files[0]) })
 }
 
 func testFile(t *testing.T, fname string) {
 	pei, err := NewPEFromFileName(fname)
 	if err != nil {
-		t.Fatalf("NewPEFromFile: %v", err)
+		t.Fatalf("NewPEFromFileName: %v", err)
 	}
+
+	testFileInternal(t, fname, pei)
+}
+
+func testFileFromBytes(t *testing.T, fname string) {
+	blob, err := os.ReadFile(fname)
+	if err != nil {
+		t.Fatalf("os.ReadFile: %v", err)
+	}
+
+	peh, err := NewPEFromBlob(blob)
+	if err != nil {
+		t.Fatalf("NewPEFromBlob: %v", err)
+	}
+
+	testFileInternal(t, fname, peh)
+}
+
+func testFileInternal(t *testing.T, fname string, pei *PEHeaders) {
 	defer pei.Close()
 
 	t.Logf("Limit: 0x%08X (%d)\n", pei.r.Limit(), pei.r.Limit())

@@ -84,10 +84,14 @@ func (s *SectionHeader) NameString() string {
 	return string(s.Name[:])
 }
 
-type peReader interface {
-	io.Closer
+type peReaderBase interface {
 	io.ReaderAt
 	io.ReadSeeker
+}
+
+type peReader interface {
+	peReaderBase
+	io.Closer
 	Base() uintptr
 	Limit() uintptr
 }
@@ -149,8 +153,15 @@ type peBounds struct {
 }
 
 type peFile struct {
-	*os.File
+	peReaderBase
 	peBounds
+}
+
+func (pef *peFile) Close() error {
+	if cl, ok := pef.peReaderBase.(io.Closer); ok {
+		return cl.Close()
+	}
+	return nil
 }
 
 func (pef *peFile) Base() uintptr {
@@ -158,11 +169,6 @@ func (pef *peFile) Base() uintptr {
 }
 
 func (pef *peFile) Limit() uintptr {
-	if pef.limit == 0 {
-		if fi, err := pef.Stat(); err == nil {
-			pef.limit = uintptr(fi.Size())
-		}
-	}
 	return pef.limit
 }
 
@@ -194,8 +200,18 @@ func NewPEFromFileName(filename string) (*PEHeaders, error) {
 }
 
 func newPEFromFile(f *os.File) (*PEHeaders, error) {
-	// peBounds base is 0, limit is loaded lazily
-	pef := &peFile{File: f}
+	fi, err := f.Stat()
+	if err != nil {
+		f.Close()
+		return nil, err
+	}
+
+	return newPEFromReaderBase(f, uintptr(fi.Size()))
+}
+
+func newPEFromReaderBase(rb peReaderBase, size uintptr) (*PEHeaders, error) {
+	// peBounds base is 0, limit is size
+	pef := &peFile{peReaderBase: rb, peBounds: peBounds{limit: size}}
 	peh, err := loadHeaders(pef)
 	if err != nil {
 		pef.Close()
@@ -203,6 +219,13 @@ func newPEFromFile(f *os.File) (*PEHeaders, error) {
 	}
 
 	return peh, nil
+}
+
+// NewPEFromBlob parses the PE headers in blob. Upon success it returns a
+// non-nil *PEHeaders, otherwise it returns a nil *PEHeaders and a non-nil error.
+// Call Close() on the returned *PEHeaders when it is no longer needed.
+func NewPEFromBlob(blob []byte) (*PEHeaders, error) {
+	return newPEFromReaderBase(bytes.NewReader(blob), uintptr(len(blob)))
 }
 
 // Close frees any resources that were opened when peh was created.
