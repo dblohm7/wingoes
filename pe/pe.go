@@ -124,7 +124,7 @@ type DataDirectoryEntry = dpe.DataDirectory
 
 func resolveOptionalHeader(machine uint16, r peReader, offset uint32) (OptionalHeader, error) {
 	switch machine {
-	case dpe.IMAGE_FILE_MACHINE_I386:
+	case dpe.IMAGE_FILE_MACHINE_I386, dpe.IMAGE_FILE_MACHINE_ARM:
 		return readStruct[optionalHeader32](r, offset)
 	case dpe.IMAGE_FILE_MACHINE_AMD64, dpe.IMAGE_FILE_MACHINE_ARM64:
 		return readStruct[optionalHeader64](r, offset)
@@ -136,7 +136,7 @@ func resolveOptionalHeader(machine uint16, r peReader, offset uint32) (OptionalH
 func checkMagic(oh OptionalHeader, machine uint16) bool {
 	var expectedMagic uint16
 	switch machine {
-	case dpe.IMAGE_FILE_MACHINE_I386:
+	case dpe.IMAGE_FILE_MACHINE_I386, dpe.IMAGE_FILE_MACHINE_ARM:
 		expectedMagic = 0x010B
 	case dpe.IMAGE_FILE_MACHINE_AMD64, dpe.IMAGE_FILE_MACHINE_ARM64:
 		expectedMagic = 0x020B
