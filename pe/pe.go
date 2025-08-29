@@ -152,38 +152,38 @@ type peBounds struct {
 	limit uintptr
 }
 
+func (peb *peBounds) Base() uintptr {
+	return peb.base
+}
+
+func (peb *peBounds) Limit() uintptr {
+	return peb.limit
+}
+
 type peFile struct {
 	peReaderBase
 	peBounds
 }
 
 func (pef *peFile) Close() error {
-	if cl, ok := pef.peReaderBase.(io.Closer); ok {
-		return cl.Close()
+	if pef.peReaderBase == nil {
+		return nil
 	}
+
+	if cl, ok := pef.peReaderBase.(io.Closer); ok {
+		if err := cl.Close(); err != nil {
+			return err
+		}
+	}
+
+	pef.peReaderBase = nil
 	return nil
-}
-
-func (pef *peFile) Base() uintptr {
-	return pef.base
-}
-
-func (pef *peFile) Limit() uintptr {
-	return pef.limit
 }
 
 type peModule struct {
 	*bytes.Reader
 	peBounds
 	modLock uintptr
-}
-
-func (pei *peModule) Base() uintptr {
-	return pei.base
-}
-
-func (pei *peModule) Limit() uintptr {
-	return pei.limit
 }
 
 // NewPEFromFileName opens a PE binary located at filename and parses its PE
@@ -221,8 +221,10 @@ func newPEFromReaderBase(rb peReaderBase, size uintptr) (*PEHeaders, error) {
 	return peh, nil
 }
 
-// NewPEFromBlob parses the PE headers in blob. Upon success it returns a
-// non-nil *PEHeaders, otherwise it returns a nil *PEHeaders and a non-nil error.
+// NewPEFromBlob parses the headers from contents of a PE file stored in blob.
+// The blob must contain the contents of a file, not a module. Upon success it
+// returns a non-nil *PEHeaders, otherwise it returns a nil *PEHeaders and a
+// non-nil error.
 // Call Close() on the returned *PEHeaders when it is no longer needed.
 func NewPEFromBlob(blob []byte) (*PEHeaders, error) {
 	return newPEFromReaderBase(bytes.NewReader(blob), uintptr(len(blob)))
@@ -521,7 +523,7 @@ const _IMAGE_NUMBEROF_DIRECTORY_ENTRIES = 16
 // sophisticated return values, so be careful to structure your type assertions
 // accordingly.
 func (nfo *PEHeaders) DataDirectoryEntry(idx DataDirectoryIndex) (any, error) {
-	if int(idx) >= _IMAGE_NUMBEROF_DIRECTORY_ENTRIES {
+	if ii := int(idx); ii < 0 || ii >= _IMAGE_NUMBEROF_DIRECTORY_ENTRIES {
 		return nil, ErrIndexOutOfRange
 	}
 
