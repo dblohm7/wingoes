@@ -67,7 +67,7 @@ func (bs *BSTR) toUTF16Ptr() *uint16 {
 	return (*uint16)(unsafe.Pointer(*bs))
 }
 
-// ToUTF16 returns the contents of bs as C-style string pointer to UTF-16 code units.
+// ToUTF16Ptr returns the contents of bs as C-style string pointer to UTF-16 code units.
 func (bs *BSTR) ToUTF16Ptr() *uint16 {
 	return unsafe.SliceData(bs.ToUTF16())
 }
