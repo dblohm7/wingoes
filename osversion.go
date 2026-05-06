@@ -168,6 +168,8 @@ const (
 	Win11Build23H2 = Win11BuildConstant(22631)
 	Win11Build24H2 = Win11BuildConstant(26100)
 	WinServer2025  = Win11Build24H2
+	Win11Build25H2 = Win11BuildConstant(26200)
+	Win11Build26H1 = Win11BuildConstant(28000)
 )
 
 // IsWin11OrGreater returns true when running on any release of Windows 11,
