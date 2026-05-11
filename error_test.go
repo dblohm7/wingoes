@@ -13,6 +13,10 @@ import (
 	"golang.org/x/sys/windows"
 )
 
+const (
+	hrTYPE_E_WRONGTYPEKIND = HRESULT(-((0x8002802A ^ 0xFFFFFFFF) + 1))
+)
+
 type hrTestCase struct {
 	hr              HRESULT
 	expectFacility  hrFacility // only valid when both expectNT and expectCustomer are false
@@ -58,30 +62,34 @@ func TestHRESULT(t *testing.T) {
 
 type errorTestCase struct {
 	code             any
-	expectNewErrorOK bool
 	expectHRESULT    bool
 	expectErrno      bool
 	expectNTStatus   bool
 }
 
 var errorTestCases = []errorTestCase{
-	errorTestCase{int64(0), false, false, false, false},
-	errorTestCase{hrS_OK, true, true, true, true},
-	errorTestCase{hrE_POINTER, true, true, false, false},
-	errorTestCase{hrE_NOTIMPL, true, true, true, false},
-	errorTestCase{windows.STATUS_ACCESS_DENIED, true, true, true, true},
-	errorTestCase{windows.ERROR_ACCESS_DENIED, true, true, true, false},
-	errorTestCase{Error(hrE_UNEXPECTED), true, true, true, false},
+	errorTestCase{hrS_OK, true, true, true},
+	errorTestCase{hrE_POINTER, true, false, false},
+	errorTestCase{hrE_NOTIMPL, true, true, false},
+	errorTestCase{windows.STATUS_ACCESS_DENIED, true, true, true},
+	errorTestCase{windows.ERROR_ACCESS_DENIED, true, true, false},
+	errorTestCase{Error(hrE_UNEXPECTED), true, true, false},
 }
 
 func TestNewError(t *testing.T) {
 	for _, tc := range errorTestCases {
-		err, ok := NewError(tc.code)
-		if ok != tc.expectNewErrorOK {
-			t.Errorf("NewError(%#v) ok got %v, want %v", tc.code, ok, tc.expectNewErrorOK)
-		}
-		if !ok {
-			continue
+		var err Error
+		switch v := tc.code.(type) {
+		case Error:
+			err = NewError(v)
+		case HRESULT:
+			err = NewError(v)
+		case windows.Errno:
+			err = NewError(v)
+		case windows.NTStatus:
+			err = NewError(v)
+		default:
+			t.Errorf("unexpected error type %T", v)
 		}
 		if tc.expectHRESULT != err.IsAvailableAsHRESULT() {
 			t.Errorf("NewError(%#v) HRESULT got %v, want %v", tc.code, err.IsAvailableAsHRESULT(), tc.expectHRESULT)
