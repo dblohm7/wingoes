@@ -278,11 +278,13 @@ func (osv *osVersionInfo) isWin10BuildOrGreater(build uint32) bool {
 		return false
 	}
 
-	result, _ := verQueryBuild(10, 0, build)
-	if result {
-		osv.fallbackBuildMin.Store(build)
-	} else {
-		osv.fallbackBuildMax.Store(build)
+	result, err := verQueryBuild(10, 0, build)
+	if err == nil {
+		if result {
+			osv.fallbackBuildMin.Store(build)
+		} else {
+			osv.fallbackBuildMax.Store(build)
+		}
 	}
 	return result
 }
